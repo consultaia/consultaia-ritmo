@@ -344,7 +344,7 @@ async function cloudPull(){
     else adoptRemote(remote,merge3(novoAqui?undefined:getBase(),DB.profiles,remote.dados.profiles));
     if(DB.meta.dirty&&subAtivo())await cloudPush(true);
     else{CLOUD.status='ok';CLOUD.last=new Date()}
-    cacheAvisos();syncAvisos();CLOUD.pulled=true;
+    cacheAvisos();pushReinscrever().then(()=>syncAvisos());CLOUD.pulled=true;
     if(!UI.modal)render();
   }catch(e){CLOUD.status='erro';CLOUD.err=e.message;CLOUD.pulled=true;if(!UI.modal)render()}
 }
@@ -672,10 +672,24 @@ async function pushAtivar(){
     let sub=await SWREG.pushManager.getSubscription();
     if(!sub)sub=await SWREG.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uToU8(j.chave)});
     await rpc('ritmo_push_inscrever',{p_endpoint:sub.endpoint});
-    try{localStorage.setItem(PKEY,'1')}catch(e){}
+    try{localStorage.setItem(PKEY,'1')}catch(e){}PUSH_UID=CLOUD.session.uid;
     cacheAvisos();await syncAvisos(true);toast('🔔 Pronto! Você será avisado mesmo com o app fechado.');
   }catch(e){toast('🔔 Avisos ativados só com o app aberto (este aparelho não aceitou o push).')}
   render();
+}
+/* O aparelho pode ter sido usado por outra conta: a cada login, a inscrição volta para quem está logado. */
+let PUSH_UID=null;
+async function pushReinscrever(){
+  if(!CLOUD_ON||!CLOUD.session||!pushLigado()||!pushSuportado()||PUSH_UID===CLOUD.session.uid)return;
+  try{const reg=SWREG||await navigator.serviceWorker.ready,sub=await reg.pushManager.getSubscription();
+    if(!sub){try{localStorage.removeItem(PKEY)}catch(e){}return}
+    await rpc('ritmo_push_inscrever',{p_endpoint:sub.endpoint});PUSH_UID=CLOUD.session.uid;AV_HASH=null;await syncAvisos(true);
+  }catch(e){}
+}
+async function pushSoltar(){
+  try{if(!pushLigado()||!pushSuportado())return;const reg=SWREG||await navigator.serviceWorker.ready,sub=await reg.pushManager.getSubscription();
+    if(sub)await rpc('ritmo_push_sair',{p_endpoint:sub.endpoint})}catch(e){}
+  PUSH_UID=null;AV_HASH=null;
 }
 async function pushDesativar(){
   try{const sub=SWREG&&await SWREG.pushManager.getSubscription();if(sub){await rpc('ritmo_push_sair',{p_endpoint:sub.endpoint}).catch(()=>{});await sub.unsubscribe()}}catch(e){}
@@ -1457,7 +1471,8 @@ const A={
       closeModal();toast('☁️ Conectado como '+e);await cloudPull();render();
     }catch(err){msg.textContent=err.message}
   },
-  logout:()=>{if(!confirm('Sair da conta? Os dados continuam neste aparelho.'))return;
+  logout:async()=>{if(!confirm('Sair da conta? Os dados continuam neste aparelho.'))return;
+    await Promise.race([pushSoltar(),new Promise(r=>setTimeout(r,2500))]);
     const t=CLOUD.session&&CLOUD.session.access_token;if(t)fetch(SUPABASE_URL+'/auth/v1/logout',{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+t}}).catch(()=>{});
     setSession(null);CLOUD.sub=null;try{localStorage.removeItem(SKEY)}catch(e){}CLOUD.status='off';render()},
   syncNow:()=>{cloudPull().then(()=>{toast('☁️ Sincronizado');render()})},
