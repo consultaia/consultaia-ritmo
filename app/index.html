@@ -151,6 +151,9 @@ header .hinst{margin-left:auto}header .hinst+select{margin-left:0}
 .wact{display:flex;align-items:center;gap:8px;background:#fff;border:2px solid var(--line);border-radius:12px;padding:10px 12px;margin:6px 0}.wact.on{border-color:var(--pri)}
 .wact label{display:flex;gap:8px;align-items:center}.wact input{width:20px;height:20px}.wact select{border:1px solid var(--line);border-radius:8px;padding:5px;background:#fff}
 @media(min-width:1024px){body:has(.gate){padding-left:0}}
+.bars{display:flex;align-items:flex-end;gap:4px;height:112px;padding-top:6px}.bars>div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;min-width:0}
+.bars i{display:block;width:100%;max-width:26px;border-radius:5px 5px 0 0;background:var(--pri)}.bars b{font-size:11px;order:-1;min-height:14px}.bars span{font-size:10px;color:var(--mut)}
+@media(min-width:1024px){.v-gestor{column-count:2;column-gap:20px}.v-gestor>:not(.card){column-span:all}.v-gestor>.kpis{margin-bottom:16px}}
 </style>
 </head>
 <body>
@@ -380,7 +383,7 @@ async function rpc(fn,body){
 }
 async function loadSub(){
   if(!CLOUD_ON||!CLOUD.session)return;
-  try{const x=await rpc('ritmo_minha_assinatura');x.skew=x.agora?new Date(x.agora).getTime()-Date.now():0;CLOUD.sub=x;try{localStorage.setItem(SKEY,JSON.stringify(CLOUD.sub))}catch(e){}}catch(e){}
+  try{const x=await rpc('ritmo_minha_assinatura');x.skew=x.agora?new Date(x.agora).getTime()-Date.now():0;try{x.admin=await rpc('ritmo_eu_admin')===true}catch(e){x.admin=!!(CLOUD.sub&&CLOUD.sub.admin)}CLOUD.sub=x;try{localStorage.setItem(SKEY,JSON.stringify(CLOUD.sub))}catch(e){}}catch(e){}
 }
 async function loadPlanos(){
   if(CLOUD.planos)return CLOUD.planos;
@@ -439,7 +442,7 @@ function subBanner(){
 function subLinha(){const x=CLOUD.sub;if(!x)return'';
   const ate=x.fim?dmy(x.fim.slice(0,10)):'';
   const nomes={mensal:'mensal',semestral:'de 6 meses',anual:'anual',casal_mensal:'Casal mensal',casal_anual:'Casal anual',casal:'Casal (convidado)'};
-  return x.fase==='pago'?`✅ Plano ${esc(nomes[x.plano]||x.plano||'')} até ${ate}`:x.fase==='teste'?`🎁 Teste grátis até ${ate}`:'⛔ Vencido'}
+  return x.fase==='pago'?`✅ ${x.plano?'Plano '+esc(nomes[x.plano]||x.plano):'Acesso liberado'} até ${ate}`:x.fase==='teste'?`🎁 Teste grátis até ${ate}`:'⛔ Vencido'}
 /* ===================== Motor de distribuição ===================== */
 const isPlanner=p=>p.mode!=='escala';
 function shiftOf(p,s){if(isPlanner(p))return null;const k=p.shifts[s];if(!k||!p.shiftTypes[k])return null;const t=p.shiftTypes[k],loc=(p.locais||[]).find(l=>l.id===(p.sloc||{})[s])||null;
@@ -1115,6 +1118,28 @@ painel(){
   h+=tips.length?`<div class="mut" style="margin-top:10px">${tips.join('<br>')}</div>`:'';
   return h+`</div>`;
 },
+gestor(){
+  const m=UI.adm;
+  let h=`<div class="row" style="margin-top:12px"><h2 class="sp" style="margin:0">📈 Gestor</h2><button class="btn sm sec" data-a="admLoad">Atualizar</button></div>`;
+  if(!m){setTimeout(()=>{if(!UI.adm&&!UI.admBusy)A.admLoad()},0);return h+`<div class="card"><div class="empty">Carregando métricas…</div></div>`}
+  if(m.erro)return h+`<div class="alert">${esc(m.erro)}</div>`;
+  const k=(v,l,c)=>`<div class="kpi" ${c?`style="background:${c}"`:''}><b>${v}</b><span>${l}</span></div>`;
+  h+=`<div class="mut" style="margin:4px 0 8px">Atualizado ${hm(new Date(m.agora).getHours()*60+new Date(m.agora).getMinutes())}</div>
+    <div class="kpis">${k(m.contas,'contas no Ritmo')}${k(m.pagantes,'pagantes agora','#ecfdf5')}${k(m.teste,'em teste grátis','#fff7ed')}${k(m.vencidos,'vencidos')}
+    ${k(brl(m.receita_total),'receita total','var(--pri2)')}${k(brl(m.receita_30d),'receita em 30 dias')}${k(brl(m.mrr),'receita mensal equivalente')}${k(m.conversao==null?'—':String(m.conversao).replace('.',',')+'%','contas que já pagaram')}
+    ${k(m.novos7,'cadastros em 7 dias')}${k(m.novos30,'cadastros em 30 dias')}${k(m.ativos7,'usaram nos últimos 7 dias')}${k(m.convidados,'convidados (Casal)')}
+    ${k(m.vendas,'vendas aprovadas')}${k(m.pendentes,'pagamentos pendentes')}${k(m.estornos,'estornos')}${k(m.push,'com avisos ligados')}</div>`;
+  const mx=Math.max(1,...m.por_dia.map(d=>d.n));
+  h+=`<div class="card"><h3>Cadastros por dia (14 dias)</h3><div class="bars">${m.por_dia.map(d=>`<div title="${d.dia}: ${d.n}"><i style="height:${Math.max(3,d.n/mx*70)}px;${d.n?'':'background:var(--line)'}"></i><b>${d.n||''}</b><span>${+d.dia.slice(8)}</span></div>`).join('')}</div></div>`;
+  h+=`<div class="card"><h3>Vendas por plano</h3>${m.por_plano.length?m.por_plano.map(x=>`<div class="row" style="margin:8px 0"><span class="sp">${esc(x.plano)}</span><span class="mut">${x.n} venda${x.n>1?'s':''}</span><b>${brl(x.valor)}</b></div>`).join(''):'<div class="mut">Nenhuma venda ainda.</div>'}
+    <div class="mut" style="margin-top:6px">Leituras de escala por foto em 7 dias: ${m.fotos7}</div></div>`;
+  const cor={pago:'#047857',teste:'#b45309',vencido:'#64748b',convidado:'#4f46e5'};
+  h+=`<div class="card"><h3>Últimas contas</h3>${m.recentes.map(x=>`<div class="item" style="cursor:default"><div class="tt"><div>${esc(x.email)}</div><div class="mut">entrou ${dmy(x.criado_em.slice(0,10))} · até ${dmy(x.fim.slice(0,10))}${x.plano?' · '+esc(x.plano):''}</div></div><b style="color:${cor[x.fase]||'inherit'};font-size:13px">${esc(x.fase)}</b></div>`).join('')||'<div class="mut">Nenhuma conta ainda.</div>'}</div>`;
+  h+=`<div class="card"><h3>Últimos pagamentos</h3>${m.pagamentos.map(x=>`<div class="item" style="cursor:default"><div class="tt"><div>${esc(x.email)}</div><div class="mut">${dmy(x.criado_em.slice(0,10))} · ${esc(x.plano)}${x.metodo?' · '+esc(x.metodo):''} · ${esc(x.status)}</div></div><b>${brl(x.valor)}</b></div>`).join('')||'<div class="mut">Nenhum pagamento ainda.</div>'}</div>`;
+  h+=`<div class="card"><h3>🎁 Dar dias grátis</h3><div class="mut">Para parceria, brinde ou suporte. A pessoa precisa já ter conta.</div>
+    <div class="row wrap" style="margin-top:8px"><input class="inl sp" id="ad-e" type="email" placeholder="email@da-pessoa.com" style="min-width:180px"><input class="inl" id="ad-d" type="number" min="1" max="730" value="30" style="width:84px"><span class="mut">dias</span><button class="btn sm" data-a="admCortesia">Liberar</button></div></div>`;
+  return h;
+},
 ajustes(){
   const p=P(),st=p.settings,esca=p.mode==='escala';
   let h='';
@@ -1356,6 +1381,9 @@ const split=v=>String(v).split('|');
 function addTask(title){const t=String(title||'').trim();if(!t)return false;P().tasks.push({id:uid(),t,cat:'pessoal',prio:'media',dur:30,due:'',period:'any',done:false,created:todayS()});return true}
 function addGoal(title){const t=String(title||'').trim();if(!t)return false;const k=UI.month.slice(0,7),p=P();(p.goals[k]=p.goals[k]||[]).push({id:uid(),t,done:false});return true}
 const A={
+  admLoad:async()=>{UI.admBusy=true;try{UI.adm=await rpc('ritmo_admin_metricas')}catch(e){UI.adm={erro:'Não foi possível carregar as métricas: '+e.message}}UI.admBusy=false;if(UI.tab==='gestor'&&!UI.modal)render()},
+  admCortesia:async()=>{const e=val('ad-e').trim(),d=+val('ad-d');if(!e){toast('Informe o e-mail.');return}
+    try{const j=await rpc('ritmo_admin_cortesia',{p_email:e,p_dias:d});if(!j.ok){toast('⚠️ '+j.erro);return}toast('🎁 Liberado até '+dmy(j.valido_ate.slice(0,10)));A.admLoad()}catch(x){toast('⚠️ Não foi possível liberar.')}},
   wizMode:v=>{wizRead();UI.wiz.mode=v;render()},
   wizNext:()=>{wizRead();if(UI.wiz.step<2){UI.wiz.step++;render();window.scrollTo(0,0)}else wizFinish()},
   wizBack:()=>{wizRead();UI.wiz.step--;render()},
@@ -1600,6 +1628,7 @@ function render(){
   if(CLOUD_ON&&CLOUD.sub&&!subAtivo()){app.innerHTML=paywallHtml()+(UI.modal?`<div class="mask"><div class="sheet">${UI.modal}</div></div>`:'');fillPlanos();return}
   if(wizAtivo()&&!UI.modal){if(document.querySelector('.wiz')&&UI.wiz)wizRead();app.innerHTML=wizHtml();return}
   const tabs=[['hoje','☀️','Hoje'],['semana','🗓️','Semana'],['mes','📆','Mês'],['planos','🎯','Planos'],['painel','📊','Painel'],['ajustes','⚙️','Ajustes']];
+  if(CLOUD.sub&&CLOUD.sub.admin)tabs.push(['gestor','📈','Gestor']);else if(UI.tab==='gestor')UI.tab='hoje';
   app.innerHTML=`<header><div class="logo">Rit<b>mo</b></div>
     ${canInstall()?'<button class="btn sm sec hinst" data-a="instalar">📲 Instalar</button>':''}${DB.profiles.length>1?`<select data-c="profile" aria-label="Perfil">${DB.profiles.map((x,i)=>`<option value="${i}" ${i===DB.cur?'selected':''}>${MODES[x.mode].i} ${esc(x.name)}</option>`).join('')}</select>`:''}</header>
     ${subBanner()}<main class="v-${UI.tab}">${VIEWS[UI.tab]()}</main>

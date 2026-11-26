@@ -49,6 +49,10 @@ PWA (um `index.html`, sem build) que organiza tarefas, hábitos, metas, lembrete
 ## Plano Casal
 - Planos `casal_mensal` (R$ 14,90) e `casal_anual` (R$ 129,90) em `ritmo_planos`. O dono informa o e-mail da outra pessoa (`ritmo_convites`); ela fica liberada enquanto o plano do dono valer.
 
+## Painel do gestor
+- Aba **Gestor** no app, visível só para contas em `public.ritmo_admins`. Mostra contas, pagantes, testes, receita, cadastros por dia, últimas contas e pagamentos, e permite dar dias grátis.
+- Para liberar outro gestor: `insert into public.ritmo_admins(user_id) select id from auth.users where email = 'email@da-pessoa.com';`
+
 ## Sincronização
 - Um documento JSON por conta em `ritmo_estado`, com número de revisão (`rev`). O app só grava se a revisão bater; se outro aparelho gravou antes, ele junta as alterações dos dois lados (merge de 3 vias) e grava de novo.
 
