@@ -1,7 +1,7 @@
 // Ritmo — pagamentos (Mercado Pago Checkout Pro: Pix ou cartão)
-// Deploy: Supabase > dri-imoveis > Edge Functions > nome "ritmo-pagamento" > colar este arquivo.
+// Projeto: enamed-engine (ConsultaIA). Função "ritmo-pagamento", com Verify JWT desligado.
 // IMPORTANTE: desligar "Verify JWT" (o webhook do Mercado Pago não manda JWT; o checkout valida o usuário aqui dentro).
-// Secrets (Edge Functions > Secrets): MP_ACCESS_TOKEN (obrigatório), APP_URL (opcional).
+// Secrets (Edge Functions > Secrets): RITMO_MP_ACCESS_TOKEN (obrigatório), APP_URL (opcional).
 // SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY já existem automaticamente.
 
 const env = (k: string, d = "") => (globalThis as any).Deno?.env.get(k) ?? (globalThis as any).process?.env?.[k] ?? d;
@@ -14,7 +14,7 @@ const SRK = () => {
 };
 const srvHeaders = (): Record<string, string> =>
   SRK().startsWith("sb_secret_") ? { apikey: SRK() } : { apikey: SRK(), Authorization: "Bearer " + SRK() };
-const MP = () => env("MP_ACCESS_TOKEN");
+const MP = () => env("RITMO_MP_ACCESS_TOKEN") || env("MP_ACCESS_TOKEN");
 const APP = () => env("APP_URL", "https://consultaia.github.io/consultaia-ritmo/");
 const FN = () => SB() + "/functions/v1/ritmo-pagamento";
 
@@ -27,11 +27,12 @@ const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
 async function db(path: string, init: RequestInit = {}) {
-  const r = await fetch(SB() + "/rest/v1/" + path, {
+  const alvo = path.startsWith("rpc/") ? "rpc/ritmo_" + path.slice(4) : "ritmo_" + path;
+  const r = await fetch(SB() + "/rest/v1/" + alvo, {
     ...init,
     headers: {
       ...srvHeaders(), "Content-Type": "application/json",
-      "Accept-Profile": "ritmo", "Content-Profile": "ritmo", Prefer: "return=representation",
+      Prefer: "return=representation",
       ...(init.headers || {}),
     },
   });
@@ -52,7 +53,7 @@ async function usuario(req: Request) {
 async function checkout(req: Request) {
   const u = await usuario(req);
   if (!u) return json({ erro: "Faça login de novo." }, 401);
-  if (!MP()) return json({ erro: "Pagamento não configurado (MP_ACCESS_TOKEN)." }, 500);
+  if (!MP()) return json({ erro: "Pagamento ainda não configurado. Tente mais tarde." }, 500);
   const body = await req.json().catch(() => ({}));
   const planos = await db("planos?select=*&ativo=eq.true&id=eq." + encodeURIComponent(String(body.plano || "")));
   const pl = planos && planos[0];
@@ -109,6 +110,11 @@ async function webhook(req: Request) {
       method: "POST",
       body: JSON.stringify({ p_ref: ref, p_mp_id: String(p.id), p_metodo: p.payment_type_id || p.payment_method_id || null }),
     });
+    return json({ ok: true, ...res });
+  }
+  // Estorno ou chargeback de um pagamento já creditado: tira os dias liberados.
+  if (["refunded", "charged_back"].includes(p.status) && pg.status === "aprovado") {
+    const res = await db("rpc/estornar_pagamento", { method: "POST", body: JSON.stringify({ p_ref: ref }) });
     return json({ ok: true, ...res });
   }
   if (["rejected", "cancelled", "refunded", "charged_back"].includes(p.status) && pg.status === "pendente") {

@@ -10,34 +10,34 @@ PWA (um `index.html`, sem build) que organiza tarefas, hábitos, metas, lembrete
 ## Estrutura
 | Arquivo | Para quê |
 |---|---|
-| `index.html` | Landing page de vendas (raiz do site) |
-| `assets/*.jpg` | Prints reais do app usados na landing |
+| `index.html`, `assets/*.jpg` | Landing page de vendas (raiz do site) com prints reais do app |
+| `termos.html`, `privacidade.html` | Termos de Uso e Política de Privacidade (LGPD) |
 | `app/index.html` | App inteiro (HTML + CSS + JS puro) |
 | `app/sw.js`, `app/manifest.json`, `app/icon-*.png` | Instalação no celular e uso offline |
-| `supabase/migrations/20261126040000_ritmo_schema.sql` | Banco: schema `ritmo` isolado no projeto **dri-imoveis** |
-| `supabase/migrations/20261126050000_ritmo_assinatura.sql` | Planos, assinaturas, pagamentos e bloqueio por vencimento |
-| `supabase/functions/ritmo-pagamento/index.ts` | Checkout Mercado Pago + webhook |
+| `supabase/migrations/20261126130000_ritmo.sql` | Banco: tabelas e funções `ritmo_*` no projeto **enamed-engine** (ConsultaIA) |
+| `supabase/functions/ritmo-pagamento/index.ts` | Checkout Mercado Pago + webhook (pagamento e estorno) |
+| `supabase/remover_do_dri_imoveis.sql` | Limpeza do antigo schema `ritmo` no projeto da Dri |
 
-## Colocar no ar
-1. **Banco (uma vez):** Supabase → dri-imoveis → SQL Editor → cole e rode o arquivo da migration.
-2. **Expor o schema:** Project Settings → Data API → *Exposed schemas* → adicione `ritmo` → Save.
-3. **Chave:** Project Settings → API Keys → copie a *publishable key* (ou `anon`) e cole em `SUPABASE_KEY` na seção "Nuvem" do `app/index.html`.
-4. **Login:** Authentication → URL Configuration → em *Redirect URLs* adicione `https://consultaia.github.io/consultaia-ritmo/**`.
-5. **Site:** GitHub → Settings → Pages → Branch `main` / root. Landing: `https://consultaia.github.io/consultaia-ritmo/` · App: `https://consultaia.github.io/consultaia-ritmo/app/` (a landing repassa `?pg=` do Mercado Pago e `?criar`/`?entrar` para o app).
+## Onde roda
+- Site: GitHub Pages. Landing em `https://consultaia.github.io/consultaia-ritmo/`, app em `/app/`.
+- Banco e login: Supabase **enamed-engine** (`jtkkqmqlydqenxwnttyi`), o mesmo do Preceptor. O login é a conta ConsultaIA: quem já tem conta no Preceptor entra no Ritmo com o mesmo e-mail e senha.
+- Tudo do Ritmo tem prefixo `ritmo_` e não altera nada do Preceptor.
 
-## Assinatura (multitenant: cada conta é um cliente)
-- Cadastro → **7 dias grátis** sem cartão → planos **Mensal R$ 9,90 · 6 meses R$ 49,90 · Anual R$ 89,90** (tabela `ritmo.planos`; mude preço direto lá).
-- Pagamento por **Mercado Pago Checkout Pro** (Pix ou cartão), sem renovação automática. Pagar de novo soma dias ao que falta.
+## Assinatura (cada conta é um cliente independente)
+- Cadastro → **7 dias grátis** sem cartão (um teste por e-mail; pontos e `+algo` do Gmail não geram teste novo).
+- Planos em `public.ritmo_planos`: **Mensal R$ 9,90 · 6 meses R$ 49,90 · Anual R$ 89,90**. Para mudar preço, edite a tabela.
+- Pagamento por **Mercado Pago Checkout Pro** (Pix ou cartão), sem renovação automática. Estorno ou chargeback tira os dias liberados.
 - Vencido: o app mostra os planos; os dados continuam guardados e podem ser baixados.
 
-### Ativar cobrança
-1. SQL Editor → rode `supabase/migrations/20261126050000_ritmo_assinatura.sql`.
-2. Edge Functions → *Deploy a new function* → *Via editor* → nome **`ritmo-pagamento`** → cole `supabase/functions/ritmo-pagamento/index.ts` → em *Function configuration* **desligue Verify JWT** → Deploy.
-3. Edge Functions → **Secrets** → `MP_ACCESS_TOKEN` = Access Token de **produção** do Mercado Pago (Suas integrações → aplicação → Credenciais de produção).
-4. Mercado Pago → Suas integrações → aplicação → **Webhooks** → URL `https://xmqmnmyejkfpmniljkbt.supabase.co/functions/v1/ritmo-pagamento/webhook`, evento **Pagamentos**.
+### Configuração (uma vez)
+1. Edge Functions → Secrets → `RITMO_MP_ACCESS_TOKEN` = Access Token de produção da aplicação "Ritmo ConsultaIA" no Mercado Pago.
+2. Mercado Pago → Webhooks (produção) → `https://jtkkqmqlydqenxwnttyi.supabase.co/functions/v1/ritmo-pagamento/webhook`, evento **Pagamentos**.
+3. Supabase → Authentication → URL Configuration → Redirect URLs → `https://consultaia.github.io/consultaia-ritmo/**` (para o "Esqueci a senha" voltar ao Ritmo).
+
+## Sincronização
+- Um documento JSON por conta em `ritmo_estado`, com número de revisão (`rev`). O app só grava se a revisão bater; se outro aparelho gravou antes, ele junta as alterações dos dois lados (merge de 3 vias) e grava de novo.
 
 ## Segurança
-- Assinatura e pagamentos só são gravados pela Edge Function (service role); o valor vem do banco e o pagamento é conferido direto na API do Mercado Pago (aviso repetido não credita duas vezes, valor menor não libera).
-- Conta vencida não grava na nuvem (RLS), mas continua lendo os próprios dados.
-- Tabela `ritmo.estado`: um documento JSON por usuário, RLS ligada (cada um só lê/grava o seu), `anon` sem acesso, limite de 2 MB.
-- Nada no schema `public` do dri-imoveis é lido ou alterado.
+- RLS em todas as tabelas: cada conta só lê e grava o próprio estado; conta vencida lê mas não grava.
+- Assinatura e pagamentos só são gravados pela Edge Function (service role). O preço vem do banco e o pagamento é conferido direto na API do Mercado Pago (aviso repetido não credita duas vezes, valor menor não libera).
+- Limite de 2 MB por conta; o app arquiva sozinho o histórico com mais de 400 dias.
