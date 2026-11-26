@@ -48,6 +48,10 @@ PWA (um `index.html`, sem build) que organiza tarefas, hábitos, metas, lembrete
 - Aba **Gestor** no app, visível só para contas em `public.ritmo_admins`. Mostra contas, pagantes, testes, receita, cadastros por dia, últimas contas e pagamentos, e permite dar dias grátis.
 - Para liberar outro gestor: `insert into public.ritmo_admins(user_id) select id from auth.users where email = 'email@da-pessoa.com';`
 
+## Agendas compartilhadas
+- Grupo de até 6 pessoas ligado por código (`ritmo_grupos`, `ritmo_grupo_membros`). Cada membro publica só o recorte que escolheu (tipos e categorias); o servidor descarta o que não está marcado.
+- Leitura apenas; cores escolhidas por quem vê. Sair do grupo apaga o recorte publicado.
+
 ## Sincronização
 - Um documento JSON por conta em `ritmo_estado`, com número de revisão (`rev`). O app só grava se a revisão bater; se outro aparelho gravou antes, ele junta as alterações dos dois lados (merge de 3 vias) e grava de novo.
 
