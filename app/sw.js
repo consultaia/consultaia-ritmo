@@ -1,5 +1,5 @@
 /* Ritmo — service worker: funciona offline e mostra os avisos como notificação do sistema */
-const CACHE='ritmo-v14';
+const CACHE='ritmo-v15';
 const FILES=['./','./index.html','./manifest.json','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE&&x!=='ritmo-dados').map(x=>caches.delete(x)))).then(()=>self.clients.claim()))});

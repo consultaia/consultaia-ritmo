@@ -264,7 +264,7 @@ async function authCall(path,body){
   return j;
 }
 function authMsg(j){const m=(j.error_description||j.msg||j.message||j.error||'').toLowerCase();
-  if(m.includes('invalid login'))return'E-mail ou senha incorretos.';
+  if(m.includes('invalid login'))return'E-mail ou senha incorretos. Se você usa o Preceptor, a senha é a mesma de lá.';
   if(m.includes('not confirmed'))return'Confirme seu e-mail (veja a caixa de entrada) e tente de novo.';
   if(m.includes('already registered')||m.includes('already been registered'))return'Este e-mail já tem conta. Use Entrar.';
   if(m.includes('different from the old'))return'A nova senha precisa ser diferente da anterior.';
@@ -415,7 +415,8 @@ function gateHtml(){
     <li>🎙️ Fale “consulta sexta às 14h” e pronto</li><li>⏰ Lembretes, hábitos, metas e gastos num lugar só</li></ul>
     <button class="btn full" data-a="login" data-v="criar">Começar 7 dias grátis</button>
     <button class="btn sec full" data-a="login" data-v="entrar" style="margin-top:8px">Já tenho conta</button>
-    <div class="mut" style="margin-top:10px">Sem cartão para testar. Depois, a partir de R$ 9,90/mês.</div></div>`;
+    <div class="mut" style="margin-top:10px">Sem cartão para testar. Depois, a partir de R$ 9,90/mês.</div>
+    <div class="mut" style="margin-top:6px">Já usa o <b>Preceptor</b>? Entre com o mesmo e-mail e senha.</div></div>`;
 }
 function paywallHtml(){
   return`<div class="gate"><div class="logo" style="font-size:30px">Rit<b>mo</b></div>
@@ -1415,7 +1416,13 @@ const A={
     msg.textContent='Aguarde…';
     try{
       if(v==='senha'){await authCall('recover?redirect_to='+encodeURIComponent(location.origin+location.pathname),{email:e});msg.textContent='Se o e-mail tiver conta, chegou um link para trocar a senha.';return}
-      if(v==='criar'){const j=await authCall('signup',{email:e,password:pw});
+      if(v==='criar'){let j;
+        try{j=await authCall('signup',{email:e,password:pw})}
+        catch(er){if(!/já tem conta/.test(er.message))throw er;
+          /* já tem conta ConsultaIA (ex.: Preceptor): tenta entrar com a senha digitada */
+          try{j=await authCall('token?grant_type=password',{email:e,password:pw})}
+          catch(e2){loginModal('entrar');document.getElementById('l-e').value=e;
+            document.getElementById('l-msg').innerHTML='Este e-mail <b>já tem conta ConsultaIA</b> (a mesma do Preceptor). Entre com a senha que você já usa lá, ou toque em “Esqueci a senha”.';return}}
         if(!j.access_token){msg.textContent='Se este e-mail é novo, confirme pelo link que enviamos. Se você já tem conta, toque em “Já tenho conta”.';return}
         setSession(keepSession(j))}
       else setSession(keepSession(await authCall('token?grant_type=password',{email:e,password:pw})));
