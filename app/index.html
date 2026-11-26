@@ -154,6 +154,16 @@ header .hinst{margin-left:auto}header .hinst+select{margin-left:0}
 .bars{display:flex;align-items:flex-end;gap:4px;height:112px;padding-top:6px}.bars>div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;min-width:0}
 .bars i{display:block;width:100%;max-width:26px;border-radius:5px 5px 0 0;background:var(--pri)}.bars b{font-size:11px;order:-1;min-height:14px}.bars span{font-size:10px;color:var(--mut)}
 @media(min-width:1024px){.v-gestor{column-count:2;column-gap:20px}.v-gestor>:not(.card){column-span:all}.v-gestor>.kpis{margin-bottom:16px}}
+.cal .d{overflow:hidden;min-height:78px}
+.pl{display:block;font-size:9px;line-height:1.25;padding:1px 3px;border-left:2px solid;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:clip;max-width:100%}
+.more{font-size:9px;color:var(--mut);font-weight:700}
+.filt{display:flex;gap:6px;overflow-x:auto;padding:6px 0 8px}.filt button{border:1px solid var(--line);background:#fff;color:var(--mut);border-radius:999px;padding:5px 10px;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer;opacity:.6}
+.filt button.on{opacity:1;color:var(--ink);border-color:var(--pri);background:var(--pri2)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--mut);margin:8px 2px}.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px}
+.editesc{border:2px solid var(--pri)}.cal.editing .d{outline:1px dashed #c7c9f5}
+.daysec{font-size:12px;font-weight:800;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 2px}
+.dayadd{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+@media(min-width:1024px){.pl{font-size:11px;padding:2px 5px}.more{font-size:11px}.v-mes .cal .d{min-height:118px}}
 </style>
 </head>
 <body>
@@ -839,7 +849,7 @@ function weekStats(p,mon){
 }
 
 /* ===================== Estado de UI ===================== */
-const UI={tab:'hoje',sub:'tarefas',week:ds(mondayOf(new Date())),month:ds(new Date(new Date().getFullYear(),new Date().getMonth(),1)),paint:'SD',ploc:'',msg:null,modal:null,wview:'lista',cap:null,brief:true};
+const UI={tab:'hoje',sub:'tarefas',week:ds(mondayOf(new Date())),month:ds(new Date(new Date().getFullYear(),new Date().getMonth(),1)),paint:'SD',ploc:'',editEsc:false,mfilt:{plant:true,comp:true,lemb:true,tar:true,ativ:true},dayS:null,msg:null,modal:null,wview:'lista',cap:null,brief:true};
 const app=document.getElementById('app');
 
 /* ===================== Componentes ===================== */
@@ -925,6 +935,20 @@ function ganhosCard(p,dias){
     <div class="ck ${t.pago?'on':''}" data-a="pagoToggle" data-v="${s}">${t.pago?'✓':''}</div></div>`);
   return h+`</div>`;
 }
+const lembretesDoDia=(p,s)=>p.reminders.filter(r=>!r.done&&(r.rep?r.date<=s&&repBate(r,parse(s)):r.date===s)).sort((a,b)=>a.time-b.time);
+const tarefasDoDia=(p,s)=>p.tasks.filter(t=>!t.done&&t.due===s);
+function dayHtml(s){
+  const p=P(),d=parse(s),c=dayCtx(p,s),t=shiftOf(p,s),items=(p.plan[s]||[]).slice().sort((a,b)=>a.s-b.s),rs=lembretesDoDia(p,s),ts=tarefasDoDia(p,s),esca=p.mode==='escala';
+  let h=`<div class="row"><h3 class="sp" style="margin:0">${['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][d.getDay()]}, ${d.getDate()} de ${MES[d.getMonth()].toLowerCase()}${s===todayS()?' · hoje':''}</h3><button class="btn ghost sm" data-a="close">✕</button></div>
+    <div style="margin:6px 0 10px">${shiftChip(c)}${t&&t.loc?` <span class="mut">🏥 ${esc(t.loc.nome)}</span>`:''}${t&&t.val?` <b style="font-size:13px">${brl(t.val)}</b>`:''}</div>`;
+  if(esca)h+=`<div class="grid2"><label class="field" style="margin:0"><span>Plantão do dia</span><select data-c="dayShift" data-v="${s}"><option value="">Folga / sem plantão</option>${Object.entries(p.shiftTypes).map(([k,x])=>`<option value="${k}" ${p.shifts[s]===k?'selected':''}>${esc(x.sig||k)} · ${esc(x.n||'')}</option>`).join('')}</select></label>
+    ${t&&p.locais.length?`<label class="field" style="margin:0"><span>Local</span><select data-c="dayLoc" data-v="${s}"><option value="">Sem local</option>${p.locais.map(l=>`<option value="${l.id}" ${p.sloc[s]===l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}</select></label>`:'<span></span>'}</div>`;
+  h+=`<div class="daysec">📅 Agenda</div>${items.length?items.map(it=>itemRow(s,it)).join(''):'<div class="mut">Nada marcado.</div>'}`;
+  if(rs.length)h+=`<div class="daysec">⏰ Lembretes</div>${rs.map(remRow).join('')}`;
+  if(ts.length)h+=`<div class="daysec">📝 Tarefas com prazo neste dia</div>${ts.map(x=>taskRow(p,x)).join('')}`;
+  return h+`<div class="dayadd"><button class="btn sm" data-a="newItem" data-v="${s}">＋ Compromisso</button><button class="btn sm sec" data-a="dayCap" data-v="lembrete|${s}">＋ Lembrete</button><button class="btn sm sec" data-a="dayCap" data-v="tarefa|${s}">＋ Tarefa</button></div>`;
+}
+function dayModal(s){UI.dayS=s;openModal(dayHtml(s),()=>dayHtml(s))}
 const seg=(items,cur,act)=>`<div class="segm">${items.map(([k,n])=>`<button class="${cur===k?'on':''}" data-a="${act}" data-v="${k}">${n}</button>`).join('')}</div>`;
 
 /* ===================== Telas ===================== */
@@ -936,7 +960,7 @@ hoje(){
   const d=new Date();
   let h=`<h2>${DOW[d.getDay()]}, ${d.getDate()} de ${MES[d.getMonth()]}</h2>`;
   if(!DB.seen)h+=`<div class="card"><h3>Comece em 3 passos</h3><ol class="steps">
-    <li>${p.mode==='escala'?'Em <b>Mês</b>, marque sua escala (toque nos dias ou use “Gerar padrão”).':p.mode==='fixo'?'Em <b>Ajustes</b>, confira os dias e horários do seu expediente.':'Em <b>Ajustes</b>, ajuste a hora de acordar e dormir.'}</li>
+    <li>${p.mode==='escala'?'Em <b>Mês</b>, toque em <b>✏️ Editar escala</b> e marque seus plantões (ou use “Gerar padrão”).':p.mode==='fixo'?'Em <b>Ajustes</b>, confira os dias e horários do seu expediente.':'Em <b>Ajustes</b>, ajuste a hora de acordar e dormir.'}</li>
     <li>Em <b>Planos</b>, jogue suas tarefas, hábitos e metas do mês. Em <b>Ajustes</b>, as atividades da semana (academia, faxina…).</li>
     <li>Em <b>Semana</b>, toque em <b>⚡ Distribuir</b>: o app encaixa tudo no seu tempo livre.</li></ol>
     <div class="mut" style="margin-top:6px">Rotina diferente? Troque o tipo de rotina em Ajustes → Perfil, quando quiser.</div>
@@ -983,34 +1007,47 @@ semana(){
   days.forEach(s=>{
     const c=dayCtx(p,s),items=p.plan[s]||[];
     h+=`<div class="card" ${s<todayS()?'style="opacity:.7"':''}><div class="row"><b class="sp">${dmy(s)}${s===todayS()?' · hoje':''}</b>${shiftChip(c)}<button class="btn ghost sm" data-a="newItem" data-v="${s}">＋</button></div>
-      ${items.length?items.map(it=>itemRow(s,it)).join(''):`<div class="mut" style="padding-top:6px">Livre</div>`}</div>`;
+      ${items.length?items.map(it=>itemRow(s,it)).join(''):`<div class="mut" style="padding-top:6px">Livre</div>`}
+      ${lembretesDoDia(p,s).map(r=>`<div class="item" data-a="editRem" data-v="${r.id}"><div class="tm">${hm(r.time)}</div><div class="bar" style="background:#f59e0b"></div><div class="tt"><div>⏰ ${esc(r.t)}</div><div class="mut">lembrete${r.rep?' · 🔁 '+REPS[r.rep].toLowerCase():''}</div></div></div>`).join('')}</div>`;
   });
   return h;
 },
 mes(){
-  const p=P(),m0=parse(UI.month),y=m0.getFullYear(),mo=m0.getMonth(),esca=p.mode==='escala';
-  const start=mondayOf(m0),today=todayS();
+  const p=P(),m0=parse(UI.month),y=m0.getFullYear(),mo=m0.getMonth(),esca=p.mode==='escala',F=UI.mfilt,edit=esca&&UI.editEsc;
+  const start=mondayOf(m0),today=todayS(),wide=window.innerWidth>=1024,maxP=wide?3:2;
   let h=`<div class="row" style="margin-top:12px"><button class="btn ghost" data-a="mo" data-v="-1">‹</button>
     <h2 class="sp" style="text-align:center;margin:0">${MES[mo]} ${y}</h2><button class="btn ghost" data-a="mo" data-v="1">›</button></div>`;
-  if(esca){
-    h+=`<div class="card"><div class="row"><h3 class="sp" style="margin:0">Pintar escala</h3><button class="btn sm sec" data-a="pattern">Gerar padrão</button></div>
-    <div class="mut" style="margin:4px 0">Escolha o tipo e toque nos dias.</div><div class="paint">`;
+  if(edit){
+    h+=`<div class="card editesc"><div class="row"><h3 class="sp" style="margin:0">✏️ Editando a escala</h3><button class="btn sm sec" data-a="pattern">Gerar padrão</button><button class="btn sm" data-a="escEdit">Concluir</button></div>
+    <div class="mut" style="margin:4px 0">1. Escolha o turno · 2. Toque nos dias. Tocar de novo apaga.</div><div class="paint">`;
     Object.entries(p.shiftTypes).forEach(([k,t])=>h+=`<button class="${UI.paint===k?'on':''}" style="background:${t.c}" data-a="paint" data-v="${k}" title="${esc(t.n||'')}">${esc(t.sig||k)}</button>`);
     h+=`<button class="${UI.paint==='-'?'on':''}" style="background:#10b981" data-a="paint" data-v="-">Folga</button></div>
       <div class="mut" style="margin:8px 0 2px">Onde? (define o valor do plantão)</div><div class="paint locs">
       <button class="${!UI.ploc?'on':''}" data-a="ploc" data-v="">Sem local</button>${p.locais.map(l=>`<button class="${UI.ploc===l.id?'on':''}" data-a="ploc" data-v="${l.id}">🏥 ${esc(l.nome)}</button>`).join('')}
       <button data-a="editLocal">+ Local</button></div></div>`;
-  }else h+=`<div class="mut" style="margin:8px 0">Toque num dia para abrir a semana dele.</div>`;
-  h+=`<div class="cal">${['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(x=>`<div class="h">${x}</div>`).join('')}`;
+  }else{
+    const chips=[['comp','📅 Compromissos'],['lemb','⏰ Lembretes'],['tar','📝 Tarefas'],['ativ','⚡ Atividades']];if(esca)chips.unshift(['plant','🏥 Plantões']);
+    h+=`<div class="row" style="margin:8px 0 2px">${esca?`<button class="btn sm ${Object.keys(p.shifts).some(d=>d.startsWith(UI.month.slice(0,7)))?'sec':''}" data-a="escEdit">✏️ Editar escala</button>`:''}<span class="sp mut" style="text-align:right">Toque num dia para ver e adicionar</span></div>
+      <div class="filt">${chips.map(([k,n])=>`<button class="${F[k]?'on':''}" data-a="mfilt" data-v="${k}">${n}</button>`).join('')}</div>`;
+  }
+  h+=`<div class="cal ${edit?'editing':''}">${['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(x=>`<div class="h">${x}</div>`).join('')}`;
   for(let i=0;i<42;i++){
     const d=addDays(start,i),s=ds(d);
     if(i>=35&&d.getMonth()!==mo)break;
-    const t=shiftOf(p,s),items=p.plan[s]||[],md=(p.notes[s]||{}).mood;
-    h+=`<div class="d ${d.getMonth()!==mo?'x':''} ${s===today?'today':''}" data-a="day" data-v="${s}"><span class="n">${d.getDate()}${md?' '+MOODS[md]:''}</span>
+    const t=(F.plant||edit)?shiftOf(p,s):null,items=p.plan[s]||[],md=(p.notes[s]||{}).mood,pills=[];
+    if(!edit){
+      if(F.comp)items.filter(it=>it.fixed).forEach(it=>pills.push([(CATS[it.cat]||CATS.pessoal).c,(wide?hm(it.s)+' ':'')+it.t,it.done]));
+      if(F.lemb)lembretesDoDia(p,s).forEach(r=>pills.push(['#f59e0b',(wide?'⏰ ':'')+r.t]));
+      if(F.tar)tarefasDoDia(p,s).forEach(x=>pills.push(['#64748b',(wide?'📝 ':'')+x.t]));
+    }
+    const ativ=!edit&&F.ativ?items.filter(it=>!it.fixed):[];
+    h+=`<div class="d ${d.getMonth()!==mo?'x':''} ${s===today?'today':''}" data-a="day" data-v="${s}" style="${t?`background:${t.c}1c`:''}"><span class="n">${d.getDate()}${md?' '+MOODS[md]:''}</span>
       ${t?`<span class="chip" style="background:${t.c}">${esc(t.k)}</span>${t.loc?`<small class="cl">${esc(t.loc.nome)}</small>`:''}`:''}
-      <div class="dots">${items.slice(0,8).map(it=>`<i style="background:${(CATS[it.cat]||CATS.pessoal).c};opacity:${it.done?1:.4}"></i>`).join('')}</div></div>`;
+      ${pills.slice(0,maxP).map(([c,x,dn])=>`<span class="pl" style="border-color:${c};background:${c}22;${dn?'opacity:.5;text-decoration:line-through':''}">${esc(x)}</span>`).join('')}${pills.length>maxP?`<span class="more">+${pills.length-maxP}</span>`:''}
+      <div class="dots">${ativ.slice(0,8).map(it=>`<i style="background:${(CATS[it.cat]||CATS.pessoal).c};opacity:${it.done?1:.4}"></i>`).join('')}</div></div>`;
   }
   h+=`</div>`;
+  if(!edit)h+=`<div class="legend"><span><i style="background:#f59e0b"></i>lembrete</span><span><i style="background:#64748b"></i>tarefa com prazo</span><span><i style="background:#3b82f6"></i>compromisso</span><span><b>● ● ●</b> atividades da semana</span></div>`;
   const inMonth=s=>{const d=parse(s);return d.getMonth()===mo&&d.getFullYear()===y};
   if(esca){
     let shiftMin=0,count=0;
@@ -1177,8 +1214,9 @@ ajustes(){
 }};
 
 /* ===================== Modais ===================== */
-function openModal(html){UI.modal=html;render()}
-function closeModal(){UI.modal=null;render()}
+function openModal(html,fn){UI.modal=html;UI.modalFn=fn||null;render()}
+/* fechar uma ficha aberta a partir do dia volta para o dia; fechar o dia volta para o calendário */
+function closeModal(){if(UI.dayS&&!UI.modalFn){dayModal(UI.dayS);return}UI.dayS=null;UI.modal=null;UI.modalFn=null;render()}
 const val=id=>document.getElementById(id).value;
 const catOpts=sel=>Object.entries(CATS).map(([k,c])=>`<option value="${k}" ${sel===k?'selected':''}>${c.i} ${c.n}</option>`).join('');
 function itemModal(s,id){
@@ -1285,8 +1323,9 @@ function profileModal(i){
 }
 
 const KINDS={tarefa:'📝 Tarefa',lembrete:'⏰ Lembrete',compromisso:'📅 Compromisso',gasto:'💰 Gasto'};
-function captureModal(){
-  UI.cap={kind:'tarefa',title:'',date:'',time:null,value:null,cat:'pessoal'};UI.capManual=null;
+function captureModal(pre){
+  UI.cap={kind:'tarefa',title:'',date:'',time:null,value:null,cat:'pessoal'};UI.capManual=null;UI.capPre=pre||null;
+  if(pre){UI.cap.kind=pre.kind;UI.cap.date=pre.date;UI.capManual=pre.kind;if(pre.kind==='lembrete')UI.cap.time=540}
   openModal(`<h3>Anotar</h3><div class="mut" style="margin-bottom:8px">Fale ou escreva do seu jeito. O Ritmo entende e organiza.</div>
     <div class="row" style="align-items:flex-start"><textarea id="cap-t" class="inl sp" rows="2" placeholder="Ex.: consulta sexta às 14h · me lembra de pagar a luz amanhã 10h · gastei 45 no mercado"></textarea>
     <button class="mic" id="mic" data-a="mic" aria-label="Falar">🎙️</button></div>
@@ -1473,7 +1512,7 @@ const A={
   goSub:v=>{UI.tab='planos';UI.sub=v;render();window.scrollTo(0,0)},
   remToggle:v=>{const r=P().reminders.find(x=>x.id===v);if(!r)return;
     if(r.rep&&!r.done){r.date=proxima(r);r.notified=false;toast('✓ Feito. Próximo: '+dmy(r.date)+' '+hm(r.time))}else{r.done=!r.done;r.notified=true}save();render()},
-  remDel:v=>{const p=P();p.reminders=p.reminders.filter(x=>x.id!==v);save();if(UI.modal)closeModal();else render()},
+  remDel:v=>{const p=P();p.reminders=p.reminders.filter(x=>x.id!==v);save();if(UI.modal&&!UI.modalFn)closeModal();else render()},
   editRem:v=>remModal(v),
   saveRem:v=>{const r=P().reminders.find(x=>x.id===v),t=val('rm-t').trim();if(!r||!t)return;
     Object.assign(r,{t,date:val('rm-d')||r.date,time:toMin(val('rm-h')),antes:+val('rm-a'),rep:val('rm-r'),done:false,notified:false});delete r.lastN;save();closeModal()},
@@ -1550,8 +1589,11 @@ const A={
   goalDel:v=>{const p=P(),k=UI.month.slice(0,7);p.goals[k]=(p.goals[k]||[]).filter(x=>x.id!==v);save();render()},
   /* Escala e perfis */
   paint:v=>{UI.paint=v;render()},
+  escEdit:()=>{UI.editEsc=!UI.editEsc;render()},
+  mfilt:v=>{UI.mfilt[v]=!UI.mfilt[v];render()},
+  dayCap:v=>{const[k,d]=split(v);captureModal({kind:k,date:d})},
   day:v=>{const p=P();
-    if(p.mode!=='escala'){UI.week=ds(mondayOf(parse(v)));UI.tab='semana';UI.msg=null;render();window.scrollTo(0,0);return}
+    if(p.mode!=='escala'||!UI.editEsc){dayModal(v);return}
     const limpa=()=>{delete p.shifts[v];delete p.sloc[v];delete p.sval[v];delete p.spago[v]};
     if(UI.paint==='-'||(p.shifts[v]===UI.paint&&(p.sloc[v]||'')===(UI.ploc||'')))limpa();
     else{if(p.shifts[v]!==UI.paint){delete p.sval[v];delete p.spago[v]}p.shifts[v]=UI.paint;if(UI.ploc)p.sloc[v]=UI.ploc;else delete p.sloc[v]}
@@ -1592,6 +1634,8 @@ const C={
   note:v=>{const p=P(),s=todayS();(p.notes[s]=p.notes[s]||{}).text=v},
   quickTask:v=>{addTask(v)},
   quickGoal:v=>{addGoal(v)},
+  dayShift:(v,el)=>{const p=P(),d=el.dataset.v;if(!v){delete p.shifts[d];delete p.sloc[d];delete p.sval[d];delete p.spago[d]}else{if(p.shifts[d]!==v){delete p.sval[d];delete p.spago[d]}p.shifts[d]=v}},
+  dayLoc:(v,el)=>{const p=P(),d=el.dataset.v;if(v)p.sloc[d]=v;else delete p.sloc[d]},
   import:(v,el)=>{const f=el.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.profiles)throw 0;d.profiles.forEach(fixProfile);const m=DB.meta||{};DB={profiles:d.profiles,cur:0,seen:true,meta:m};save();render();alert('Backup restaurado.')}catch(e){alert('Arquivo inválido.')}};r.readAsText(f)}
 };
 app.addEventListener('click',e=>{
@@ -1604,7 +1648,7 @@ app.addEventListener('change',e=>{
   const f=C[el.dataset.c];if(f){f(el.value,el);save();if(el.dataset.c!=='import')render()}
 });
 app.addEventListener('input',e=>{
-  if(e.target.id==='cap-t'){const r=parseNL(e.target.value);if(UI.capManual){r.kind=UI.capManual;if(r.kind==='lembrete'&&r.time==null)r.time=540;if(r.kind!=='tarefa'&&!r.date)r.date=todayS()}UI.cap=r;capRefresh()}
+  if(e.target.id==='cap-t'){const r=parseNL(e.target.value);if(UI.capPre&&!/\b(hoje|amanha|ontem|dia \d|domingo|segunda|terca|quarta|quinta|sexta|sabado|\d\/\d)/.test(deacc(e.target.value.toLowerCase())))r.date=UI.capPre.date;if(UI.capManual){r.kind=UI.capManual;if(r.kind==='lembrete'&&r.time==null)r.time=540;if(r.kind!=='tarefa'&&!r.date)r.date=todayS()}UI.cap=r;capRefresh()}
 });
 app.addEventListener('keydown',e=>{
   if(e.key==='Enter'&&!e.shiftKey&&e.target.id==='cap-t'){e.preventDefault();A.capSave();return}
@@ -1613,6 +1657,7 @@ app.addEventListener('keydown',e=>{
 
 /* ===================== Render ===================== */
 function render(){
+  if(UI.modal&&UI.modalFn)UI.modal=UI.modalFn();
   if(CLOUD_ON&&!CLOUD.session){app.innerHTML=gateHtml()+(UI.modal?`<div class="mask"><div class="sheet">${UI.modal}</div></div>`:'');return}
   if(CLOUD_ON&&CLOUD.sub&&!subAtivo()){app.innerHTML=paywallHtml()+(UI.modal?`<div class="mask"><div class="sheet">${UI.modal}</div></div>`:'');fillPlanos();return}
   if(wizAtivo()&&!UI.modal){if(document.querySelector('.wiz')&&UI.wiz)wizRead();app.innerHTML=wizHtml();return}
