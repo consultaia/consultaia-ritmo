@@ -101,6 +101,15 @@ nav button span{display:block;font-size:20px;line-height:1.2}nav button.on{color
 .gb.dn{opacity:.45;text-decoration:line-through}
 .gr{position:absolute;left:0;right:0;border-top:2px dashed var(--warn);font-size:9px;color:#9a3412;padding-left:2px;white-space:nowrap;overflow:hidden;pointer-events:none}
 .now{position:absolute;left:0;right:0;border-top:2px solid var(--bad);z-index:2}
+.sw input{display:none}.sw i{display:block;width:30px;height:30px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px var(--line);cursor:pointer}.sw input:checked+i{box-shadow:0 0 0 3px var(--ink)}
+.gate{max-width:440px;margin:0 auto;padding:40px 6px 30px;text-align:center}
+.gate h1{font-size:26px;line-height:1.2;margin:18px 0 10px;letter-spacing:-.5px}
+.pitch{list-style:none;padding:0;margin:18px 0 22px;text-align:left;display:grid;gap:10px}.pitch li{background:#fff;border-radius:12px;padding:12px 14px;font-size:15px}
+.plans{display:grid;gap:10px;margin-top:12px}
+.plan{position:relative;display:grid;gap:2px;text-align:left;border:2px solid var(--line);background:#fff;border-radius:16px;padding:14px 16px;cursor:pointer}
+.plan big{font-size:24px;font-weight:800}.plan small{color:var(--mut)}.plan.best{border-color:var(--pri);background:var(--pri2)}
+.plan .tag{position:absolute;right:12px;top:-10px;background:var(--pri);color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
+.subbar{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:8px 10px 8px 12px;font-size:13px;font-weight:600;margin:4px 0}
 </style>
 </head>
 <body>
@@ -176,7 +185,7 @@ function newProfile(name,mode){mode=MODES[mode]?mode:'escala';return fixProfile(
 function fixProfile(p){
   p.mode=MODES[p.mode]?p.mode:'escala';p.tasks=p.tasks||[];p.habits=p.habits||[];p.hlog=p.hlog||{};
   p.top=p.top||{};p.notes=p.notes||{};p.goals=p.goals||{};p.plan=p.plan||{};p.shifts=p.shifts||{};
-  p.shiftTypes=p.shiftTypes||clone(DEFAULT_SHIFTS);p.acts=p.acts||[];p.reminders=p.reminders||[];p.expenses=p.expenses||[];return p;
+  p.shiftTypes=p.shiftTypes||clone(DEFAULT_SHIFTS);Object.entries(p.shiftTypes).forEach(([k,t])=>{if(!t.sig)t.sig=k});p.acts=p.acts||[];p.reminders=p.reminders||[];p.expenses=p.expenses||[];return p;
 }
 function load(){
   try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.profiles&&d.profiles.length){d.profiles.forEach(fixProfile);return d}}catch(e){}
@@ -229,6 +238,7 @@ function localStamp(){return(DB.meta&&DB.meta.updatedAt)||null}
 async function cloudPull(){
   if(!CLOUD_ON||!CLOUD.session)return;
   CLOUD.status='sync';
+  await loadSub();
   try{
     const rows=await rest('GET','?select=dados,atualizado_em&user_id=eq.'+CLOUD.session.uid);
     const remote=rows&&rows[0];
@@ -236,11 +246,11 @@ async function cloudPull(){
     if(remote&&remote.dados&&remote.dados.profiles&&(!changedLocal||remote.atualizado_em>localStamp())){
       const d=remote.dados;d.profiles.forEach(fixProfile);d.meta=Object.assign({},d.meta,{syncedAt:remote.atualizado_em,updatedAt:remote.atualizado_em});
       DB=d;if(DB.cur>=DB.profiles.length)DB.cur=0;persist();CLOUD.status='ok';CLOUD.last=new Date();if(!UI.modal)render();
-    }else await cloudPush(true);
+    }else if(subAtivo())await cloudPush(true);else{CLOUD.status='ok';CLOUD.last=new Date()}
   }catch(e){CLOUD.status='erro';CLOUD.err=e.message;if(!UI.modal)render()}
 }
 async function cloudPush(now){
-  if(!CLOUD_ON||!CLOUD.session)return;
+  if(!CLOUD_ON||!CLOUD.session||!subAtivo())return;
   clearTimeout(CLOUD.timer);
   if(!now){CLOUD.timer=setTimeout(()=>cloudPush(true),1500);return}
   if(CLOUD.busy){CLOUD.timer=setTimeout(()=>cloudPush(true),1500);return}
@@ -254,9 +264,78 @@ async function cloudPush(now){
 }
 function cloudBadge(){const s=CLOUD.status;
   return s==='ok'?`☁️ Sincronizado ${CLOUD.last?hm(CLOUD.last.getHours()*60+CLOUD.last.getMinutes()):''}`:s==='sync'?'🔄 Sincronizando…':s==='erro'?`⚠️ Sem sincronizar (${esc(CLOUD.err||'')}). Os dados continuam salvos no aparelho.`:'Só neste aparelho'}
+/* ===================== Assinatura ===================== */
+const SKEY='ritmo.sub';
+try{CLOUD.sub=JSON.parse(localStorage.getItem(SKEY))}catch(e){}
+function subAtivo(){const x=CLOUD.sub;return!!(x&&x.fim&&new Date(x.fim)>new Date())}
+function subDias(){const x=CLOUD.sub;return x&&x.fim?Math.ceil((new Date(x.fim)-new Date())/86400000):0}
+async function rpc(fn,body){
+  const t=await token();if(!t)throw new Error('sem sessão');
+  const r=await fetch(SUPABASE_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+t,'Content-Type':'application/json','Content-Profile':'ritmo','Accept-Profile':'ritmo'},body:JSON.stringify(body||{})});
+  const j=await r.json().catch(()=>null);if(!r.ok)throw new Error((j&&j.message)||('HTTP '+r.status));return j;
+}
+async function loadSub(){
+  if(!CLOUD_ON||!CLOUD.session)return;
+  try{CLOUD.sub=await rpc('minha_assinatura');try{localStorage.setItem(SKEY,JSON.stringify(CLOUD.sub))}catch(e){}}catch(e){}
+}
+async function loadPlanos(){
+  if(CLOUD.planos)return CLOUD.planos;
+  const r=await fetch(SUPABASE_URL+'/rest/v1/planos?select=id,nome,valor,dias&order=ordem',{headers:{apikey:SUPABASE_KEY,'Accept-Profile':'ritmo'}});
+  if(!r.ok)throw new Error('HTTP '+r.status);return CLOUD.planos=await r.json();
+}
+async function irPagar(plano){
+  const t=await token();if(!t){toast('Entre de novo para assinar.');return}
+  toast('Abrindo o Mercado Pago…');
+  const r=await fetch(SUPABASE_URL+'/functions/v1/ritmo-pagamento/checkout',{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({plano})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j.url){toast('⚠️ '+(j.erro||'Não foi possível abrir o pagamento.'));return}
+  persist();location.href=j.url;
+}
+async function aguardarLiberacao(){
+  toast('✅ Pagamento enviado. Liberando sua conta…');
+  for(let i=0;i<20;i++){await loadSub();if(CLOUD.sub&&CLOUD.sub.fase==='pago'){toast('🎉 Assinatura ativa até '+dmy(CLOUD.sub.fim.slice(0,10)));render();return}await new Promise(r=>setTimeout(r,3000))}
+  render();toast('Pagamento em análise. A liberação chega assim que o Mercado Pago confirmar.');
+}
+function planosHtml(lista){
+  const mens=lista.find(x=>x.id==='mensal');
+  return`<div class="plans">${lista.map(pl=>{const pm=pl.valor/(pl.dias/30.4),eco=mens&&pl.id!=='mensal'?Math.round((1-pm/mens.valor)*100):0;
+    return`<button class="plan ${pl.id==='anual'?'best':''}" data-a="pagar" data-v="${esc(pl.id)}">${pl.id==='anual'?'<span class="tag">Mais escolhido</span>':''}
+      <b>${esc(pl.nome)}</b><big>${brl(pl.valor)}</big><small>${pl.id==='mensal'?'por mês':'≈ '+brl(pm)+'/mês'}${eco>0?` · economize ${eco}%`:''}</small></button>`}).join('')}</div>
+    <div class="mut" style="text-align:center;margin-top:8px">Pix ou cartão pelo Mercado Pago · sem renovação automática · libera na hora</div>`;
+}
+function gateHtml(){
+  return`<div class="gate"><div class="logo" style="font-size:34px">Rit<b>mo</b></div>
+    <h1>Sua rotina se organiza sozinha.</h1>
+    <ul class="pitch"><li>🏥 Plantão, horário fixo ou rotina livre: o app se adapta</li><li>⚡ Distribui tarefas, treino e casa no seu tempo livre</li>
+    <li>🎙️ Fale “consulta sexta às 14h” e pronto</li><li>⏰ Lembretes, hábitos, metas e gastos num lugar só</li></ul>
+    <button class="btn full" data-a="login" data-v="criar">Começar 7 dias grátis</button>
+    <button class="btn sec full" data-a="login" data-v="entrar" style="margin-top:8px">Já tenho conta</button>
+    <div class="mut" style="margin-top:10px">Sem cartão para testar. Depois, a partir de R$ 9,90/mês.</div></div>`;
+}
+function paywallHtml(){
+  return`<div class="gate"><div class="logo" style="font-size:30px">Rit<b>mo</b></div>
+    <h1>${CLOUD.sub&&CLOUD.sub.fase==='vencido'&&CLOUD.sub.valido_ate?'Sua assinatura venceu':'Seu teste grátis acabou'}</h1>
+    <p class="mut">Seus dados estão guardados. Escolha um plano para continuar de onde parou.</p>
+    <div id="planos"><div class="empty">Carregando planos…</div></div>
+    <div class="row wrap" style="justify-content:center;margin-top:14px"><button class="btn ghost sm" data-a="subCheck">Já paguei</button>
+    <button class="btn ghost sm" data-a="export">Baixar meus dados</button><button class="btn ghost sm" data-a="logoutNow">Sair</button></div>
+    <div class="mut" style="margin-top:8px">${esc(CLOUD.session&&CLOUD.session.email||'')}</div></div>`;
+}
+function fillPlanos(){const el=document.getElementById('planos');if(!el)return;
+  loadPlanos().then(l=>{el.innerHTML=planosHtml(l)}).catch(()=>{el.innerHTML='<div class="alert">Sem conexão para carregar os planos. Tente de novo.</div>'})}
+function subBanner(){
+  if(!CLOUD_ON||!CLOUD.session||!CLOUD.sub||!subAtivo())return'';
+  const d=subDias(),f=CLOUD.sub.fase;
+  if(f==='teste')return`<div class="subbar">🎁 Teste grátis: ${d<=1?'último dia':'faltam '+d+' dias'} <button class="btn sm" data-a="planos">Assinar</button></div>`;
+  if(d<=5)return`<div class="subbar">⏳ Seu plano vence em ${d} dia${d>1?'s':''} <button class="btn sm" data-a="planos">Renovar</button></div>`;
+  return'';
+}
+function subLinha(){const x=CLOUD.sub;if(!x)return'';
+  const ate=x.fim?dmy(x.fim.slice(0,10)):'';
+  return x.fase==='pago'?`✅ Plano ${esc(x.plano||'')} até ${ate}`:x.fase==='teste'?`🎁 Teste grátis até ${ate}`:'⛔ Vencido'}
 /* ===================== Motor de distribuição ===================== */
 const isPlanner=p=>p.mode!=='escala';
-function shiftOf(p,s){if(isPlanner(p))return null;const k=p.shifts[s];return k&&p.shiftTypes[k]?{k,...p.shiftTypes[k]}:null}
+function shiftOf(p,s){if(isPlanner(p))return null;const k=p.shifts[s];if(!k||!p.shiftTypes[k])return null;const t=p.shiftTypes[k];return{...t,key:k,k:t.sig||k,n:t.n||t.sig||k}}
 function dayCtx(p,s){
   const st=p.settings,d=parse(s),busy=[];
   const t=shiftOf(p,s),y=shiftOf(p,ds(addDays(d,-1)));
@@ -602,7 +681,7 @@ mes(){
   if(esca){
     h+=`<div class="card"><div class="row"><h3 class="sp" style="margin:0">Pintar escala</h3><button class="btn sm sec" data-a="pattern">Gerar padrão</button></div>
     <div class="mut" style="margin:4px 0">Escolha o tipo e toque nos dias.</div><div class="paint">`;
-    Object.entries(p.shiftTypes).forEach(([k,t])=>h+=`<button class="${UI.paint===k?'on':''}" style="background:${t.c}" data-a="paint" data-v="${k}">${esc(k)}</button>`);
+    Object.entries(p.shiftTypes).forEach(([k,t])=>h+=`<button class="${UI.paint===k?'on':''}" style="background:${t.c}" data-a="paint" data-v="${k}" title="${esc(t.n||'')}">${esc(t.sig||k)}</button>`);
     h+=`<button class="${UI.paint==='-'?'on':''}" style="background:#10b981" data-a="paint" data-v="-">Folga</button></div></div>`;
   }else h+=`<div class="mut" style="margin:8px 0">Toque num dia para abrir a semana dele.</div>`;
   h+=`<div class="cal">${['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(x=>`<div class="h">${x}</div>`).join('')}`;
@@ -714,8 +793,8 @@ painel(){
 ajustes(){
   const p=P(),st=p.settings,esca=p.mode==='escala';
   let h='';
-  if(CLOUD_ON)h+=CLOUD.session?`<h2>Conta</h2><div class="card"><div class="row"><div class="sp"><b>${esc(CLOUD.session.email||'')}</b><div class="mut" id="cloudst">${cloudBadge()}</div></div>
-      <button class="btn sm sec" data-a="syncNow">Sincronizar</button></div><button class="btn sm ghost" data-a="logout" style="margin-top:6px">Sair desta conta</button></div>`
+  if(CLOUD_ON)h+=CLOUD.session?`<h2>Conta</h2><div class="card"><div class="row"><div class="sp"><b>${esc(CLOUD.session.email||'')}</b><div class="mut">${subLinha()}</div><div class="mut" id="cloudst">${cloudBadge()}</div></div>
+      <button class="btn sm sec" data-a="syncNow">Sincronizar</button></div><div class="row wrap" style="margin-top:8px"><button class="btn sm" data-a="planos">${CLOUD.sub&&CLOUD.sub.fase==='pago'?'Renovar / estender':'Assinar'}</button><button class="btn sm ghost" data-a="logout">Sair desta conta</button></div></div>`
     :`<h2>Conta</h2><div class="card"><div class="mut" style="margin-bottom:8px">Entre para guardar tudo na nuvem e usar no celular e no computador.</div>
       <button class="btn full" data-a="login">Entrar ou criar conta</button></div>`;
   h+=`<h2>Perfil</h2><div class="card"><label class="field"><span>Nome</span><input value="${esc(p.name)}" data-c="pname"></label>
@@ -736,12 +815,11 @@ ajustes(){
     <div class="grid2"><label class="field"><span>Início</span><input type="time" value="${hm(st.work.s)}" data-c="work.s"></label>
     <label class="field"><span>Fim</span><input type="time" value="${hm(st.work.e)}" data-c="work.e"></label></div>`:''}
   </div>`;
-  if(esca){h+=`<h2>Tipos de plantão</h2><div class="card">`;
-  Object.entries(p.shiftTypes).forEach(([k,t])=>h+=`<div class="row" style="margin:6px 0"><span class="chip" style="background:${t.c};width:46px;justify-content:center">${esc(k)}</span>
-    <input type="time" value="${hm(t.s)}" data-c="shift.s" data-v="${k}" style="border:1px solid var(--line);border-radius:8px;padding:6px">
-    <span class="mut">até</span><input type="time" value="${hm(t.e)}" data-c="shift.e" data-v="${k}" style="border:1px solid var(--line);border-radius:8px;padding:6px">
-    <span class="mut">${fdur(t.e-t.s)}</span></div>`);
-  h+=`<div class="mut">Se o fim for menor que o início, o plantão termina no dia seguinte.</div></div>`;}
+  if(esca){h+=`<h2>Turnos e plantões</h2><div class="card">`;
+  Object.entries(p.shiftTypes).forEach(([k,t])=>h+=`<div class="item" data-a="editShift" data-v="${k}"><span class="chip" style="background:${t.c};min-width:46px;justify-content:center">${esc(t.sig||k)}</span>
+    <div class="tt"><div>${esc(t.n||t.sig||k)}</div><div class="mut">${hm(t.s)}–${hm(t.e)} · ${fdur(t.e-t.s)}${t.e>1440?' · vira o dia':''}</div></div><span class="mut">›</span></div>`);
+  h+=`<button class="btn sec full" data-a="editShift" style="margin-top:8px">+ Novo turno</button>
+    <div class="mut" style="margin-top:6px">Dê o nome e a sigla que usa no seu serviço (ex.: “MT – Manhã/Tarde”, “P12”, “Sobreaviso”).</div></div>`;}
   h+=`<h2>Perfis neste aparelho</h2><div class="card">${DB.profiles.map((x,i)=>`<div class="item" data-a="editProfile" data-v="${i}"><div class="tt"><div>${i===DB.cur?'● ':''}${esc(x.name)}</div><div class="mut">${MODES[x.mode].i} ${MODES[x.mode].n}</div></div><span class="mut">›</span></div>`).join('')}
     <button class="btn sec full" data-a="addProfile" style="margin-top:8px">+ Novo perfil</button></div>
   <h2>Backup</h2><div class="card row wrap"><button class="btn sec" data-a="export">Exportar backup</button>
@@ -803,13 +881,28 @@ function habitModal(id){
     <div class="row" style="margin-top:12px">${x?`<button class="btn danger" data-a="delHabit" data-v="${x.id}">Excluir</button>`:''}<span class="sp"></span>
     <button class="btn ghost" data-a="close">Cancelar</button><button class="btn" data-a="saveHabit" data-v="${x?x.id:''}">Salvar</button></div>`);
 }
+const SHIFT_COLORS=['#0ea5e9','#1e293b','#22c55e','#f97316','#7c3aed','#ef4444','#eab308','#14b8a6','#ec4899','#64748b'];
+function shiftModal(k){
+  const p=P(),t=k?p.shiftTypes[k]:null,x=t||{sig:'',n:'',s:420,e:1140,c:SHIFT_COLORS[Object.keys(p.shiftTypes).length%SHIFT_COLORS.length]};
+  const used=k?Object.values(p.shifts).filter(v=>v===k).length:0;
+  openModal(`<h3>${t?'Editar turno':'Novo turno'}</h3>
+    <div class="grid2" style="grid-template-columns:110px 1fr"><label class="field"><span>Sigla</span><input id="s-g" maxlength="6" value="${esc(x.sig||k||'')}" placeholder="Ex.: MT" style="text-transform:uppercase"></label>
+    <label class="field"><span>Nome</span><input id="s-n" value="${esc(x.n||'')}" placeholder="Ex.: Manhã e tarde"></label></div>
+    <div class="grid2"><label class="field"><span>Começa</span><input id="s-s" type="time" value="${hm(x.s)}"></label>
+    <label class="field"><span>Termina</span><input id="s-e" type="time" value="${hm(x.e)}"></label></div>
+    <div class="mut">Se terminar antes do início, o app entende que vira o dia (ex.: 19:00 → 07:00).</div>
+    <div class="field"><span>Cor</span><div class="row wrap">${SHIFT_COLORS.map(c=>`<label class="sw"><input type="radio" name="s-c" value="${c}" ${x.c===c?'checked':''}><i style="background:${c}"></i></label>`).join('')}</div></div>
+    ${used?`<div class="mut">Usado em ${used} dia(s) da escala.</div>`:''}
+    <div class="row" style="margin-top:12px">${t?`<button class="btn danger" data-a="delShift" data-v="${k}">Excluir</button>`:''}<span class="sp"></span>
+    <button class="btn ghost" data-a="close">Cancelar</button><button class="btn" data-a="saveShift" data-v="${k||''}">Salvar</button></div>`);
+}
 function patternModal(){
   const p=P();
   openModal(`<h3>Gerar escala por padrão</h3>
     <label class="field"><span>Primeiro dia do ciclo</span><input id="p-d" type="date" value="${todayS()}"></label>
     <label class="field"><span>Padrão</span><select id="p-k">${Object.entries(PATTERNS).map(([k,v])=>`<option value="${k}">${v.n}</option>`).join('')}</select></label>
     <label class="field"><span>Personalizado (códigos separados por vírgula; “-” = folga)</span><input id="p-c" placeholder="Ex.: SD,SN,-,-"></label>
-    <div class="mut">Códigos disponíveis: ${Object.keys(p.shiftTypes).join(', ')}</div>
+    <div class="mut">Siglas disponíveis: ${Object.entries(p.shiftTypes).map(([k,t])=>esc(t.sig||k)).join(', ')}</div>
     <label class="field"><span>Aplicar por quantos dias</span><select id="p-n"><option>30</option><option>60</option><option selected>90</option><option>180</option></select></label>
     <div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn ghost" data-a="close">Cancelar</button><button class="btn" data-a="applyPattern">Aplicar</button></div>`);
 }
@@ -856,7 +949,7 @@ function loginModal(mode){
     <button class="btn full" data-a="authGo" data-v="${mode}" style="margin-top:10px">${mode==='criar'?'Criar conta':mode==='senha'?'Enviar link':'Entrar'}</button>
     <div class="row wrap" style="justify-content:center;margin-top:10px">${mode!=='entrar'?'<button class="btn ghost sm" data-a="login" data-v="entrar">Já tenho conta</button>':''}
     ${mode!=='criar'?'<button class="btn ghost sm" data-a="login" data-v="criar">Criar conta</button>':''}${mode!=='senha'?'<button class="btn ghost sm" data-a="login" data-v="senha">Esqueci a senha</button>':''}</div>
-    <div class="mut" style="margin-top:8px">O que já está neste aparelho vai junto para a sua conta.</div>`);
+    <div class="mut" style="margin-top:8px">${mode==='criar'?'7 dias grátis, sem cartão. ':''}O que já está neste aparelho vai junto para a sua conta.</div>`);
 }
 function expModal(id){
   const e=P().expenses.find(x=>x.id===id);if(!e)return;
@@ -886,6 +979,23 @@ const split=v=>String(v).split('|');
 function addTask(title){const t=String(title||'').trim();if(!t)return false;P().tasks.push({id:uid(),t,cat:'pessoal',prio:'media',dur:30,due:'',period:'any',done:false,created:todayS()});return true}
 function addGoal(title){const t=String(title||'').trim();if(!t)return false;const k=UI.month.slice(0,7),p=P();(p.goals[k]=p.goals[k]||[]).push({id:uid(),t,done:false});return true}
 const A={
+  planos:()=>{openModal(`<h3>Escolha seu plano</h3><div class="mut" style="margin-bottom:8px">${subLinha()}</div><div id="planos"><div class="empty">Carregando…</div></div>
+    <div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn ghost" data-a="close">Fechar</button></div>`);fillPlanos()},
+  pagar:v=>irPagar(v),
+  subCheck:async()=>{toast('Verificando…');await loadSub();if(subAtivo()){toast('🎉 Conta liberada!');cloudPull()}else toast('Ainda não chegou a confirmação do pagamento.');render()},
+  logoutNow:()=>{setSession(null);CLOUD.sub=null;try{localStorage.removeItem(SKEY)}catch(e){}CLOUD.status='off';render()},
+  editShift:v=>shiftModal(v||null),
+  saveShift:v=>{const p=P(),sig=val('s-g').trim().toUpperCase(),n=val('s-n').trim();
+    if(!sig){alert('Dê uma sigla ao turno.');return}
+    const dup=Object.entries(p.shiftTypes).find(([k,t])=>k!==v&&String(t.sig||k).toUpperCase()===sig);if(dup){alert('Já existe um turno com a sigla '+sig+'.');return}
+    const s0=toMin(val('s-s'));let e=toMin(val('s-e'));if(e<=s0)e+=1440;
+    const c=(document.querySelector('input[name=s-c]:checked')||{}).value||SHIFT_COLORS[0];
+    const key=v||('T'+uid().slice(0,5).toUpperCase());
+    p.shiftTypes[key]={...(p.shiftTypes[key]||{}),sig,n:n||sig,s:s0,e,c};
+    if(UI.paint===v||!v)UI.paint=key;save();closeModal()},
+  delShift:v=>{const p=P(),used=Object.keys(p.shifts).filter(s=>p.shifts[s]===v);
+    if(!confirm(used.length?`Excluir o turno? Ele sai de ${used.length} dia(s) da escala.`:'Excluir o turno?'))return;
+    used.forEach(s=>delete p.shifts[s]);delete p.shiftTypes[v];if(UI.paint===v)UI.paint=Object.keys(p.shiftTypes)[0]||'-';save();closeModal()},
   login:v=>loginModal(v||'entrar'),
   authGo:async v=>{
     const e=val('l-e').trim(),pw=document.getElementById('l-p')?val('l-p'):'',msg=document.getElementById('l-msg');
@@ -902,7 +1012,7 @@ const A={
   },
   logout:()=>{if(!confirm('Sair da conta? Os dados continuam neste aparelho.'))return;
     const t=CLOUD.session&&CLOUD.session.access_token;if(t)fetch(SUPABASE_URL+'/auth/v1/logout',{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+t}}).catch(()=>{});
-    setSession(null);CLOUD.status='off';render()},
+    setSession(null);CLOUD.sub=null;try{localStorage.removeItem(SKEY)}catch(e){}CLOUD.status='off';render()},
   syncNow:()=>{cloudPull().then(()=>{toast('☁️ Sincronizado');render()})},
   /* Captura, lembretes, gastos */
   capture:()=>captureModal(),
@@ -1007,9 +1117,11 @@ const A={
   pattern:()=>patternModal(),
   applyPattern:()=>{
     const p=P(),k=val('p-k'),start=val('p-d'),n=+val('p-n');
-    const seq=k==='custom'?val('p-c').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean):PATTERNS[k].seq;
+    const seq=k==='custom'?val('p-c').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean):PATTERNS[k].seq.slice();
     if(!seq.length||!start){alert('Defina o padrão e a data.');return}
-    const bad=seq.filter(c=>c!=='-'&&!p.shiftTypes[c]);if(bad.length){alert('Código desconhecido: '+bad.join(', '));return}
+    const bySig={};Object.entries(p.shiftTypes).forEach(([key,t])=>{bySig[key.toUpperCase()]=key;bySig[String(t.sig||key).toUpperCase()]=key});
+    const bad=seq.filter(c=>c!=='-'&&!bySig[c]);if(bad.length){alert('Sigla desconhecida: '+bad.join(', '));return}
+    seq.forEach((c,i)=>{if(c!=='-')seq[i]=bySig[c]});
     for(let i=0;i<n;i++){const s=ds(addDays(parse(start),i)),c=seq[i%seq.length];if(c==='-')delete p.shifts[s];else p.shifts[s]=c}
     save();closeModal();
   },
@@ -1059,16 +1171,20 @@ app.addEventListener('keydown',e=>{
 
 /* ===================== Render ===================== */
 function render(){
+  if(CLOUD_ON&&!CLOUD.session){app.innerHTML=gateHtml()+(UI.modal?`<div class="mask"><div class="sheet">${UI.modal}</div></div>`:'');return}
+  if(CLOUD_ON&&CLOUD.sub&&!subAtivo()){app.innerHTML=paywallHtml()+(UI.modal?`<div class="mask"><div class="sheet">${UI.modal}</div></div>`:'');fillPlanos();return}
   const tabs=[['hoje','☀️','Hoje'],['semana','🗓️','Semana'],['mes','📆','Mês'],['planos','🎯','Planos'],['painel','📊','Painel'],['ajustes','⚙️','Ajustes']];
   app.innerHTML=`<header><div class="logo">Rit<b>mo</b></div>
     <select data-c="profile" aria-label="Perfil">${DB.profiles.map((x,i)=>`<option value="${i}" ${i===DB.cur?'selected':''}>${MODES[x.mode].i} ${esc(x.name)}</option>`).join('')}</select></header>
-    <main>${VIEWS[UI.tab]()}</main>
+    ${subBanner()}<main>${VIEWS[UI.tab]()}</main>
     <nav><div class="in">${tabs.map(([k,i,n])=>`<button class="${UI.tab===k?'on':''}" data-a="tab" data-v="${k}"><span>${i}</span>${n}</button>`).join('')}</div></nav>
     ${UI.modal?`<div class="mask"><div class="sheet">${UI.modal}</div></div>`:'<button class="fab" data-a="capture" aria-label="Anotar">＋</button>'}`;
 }
 render();
 checkReminders();setInterval(checkReminders,20000);
-if(CLOUD_ON&&CLOUD.session)cloudPull();
+if(CLOUD_ON&&CLOUD.session)cloudPull().then(()=>render());
+(function(){const q=new URLSearchParams(location.search).get('pg');if(!q)return;history.replaceState(null,'',location.pathname);
+  if(q==='ok'||q==='pendente')aguardarLiberacao();else toast('Pagamento não concluído. Você pode tentar de novo.')})();
 document.addEventListener('visibilitychange',()=>{if(document.hidden){if(CLOUD.session&&CLOUD.timer)cloudPush(true)}else{checkReminders();if(CLOUD_ON&&CLOUD.session&&!CLOUD.busy)cloudPull();else if(!UI.modal)render()}});
 </script>
 </body>
