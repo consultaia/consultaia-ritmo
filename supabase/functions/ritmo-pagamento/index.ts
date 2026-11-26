@@ -6,7 +6,14 @@
 
 const env = (k: string, d = "") => (globalThis as any).Deno?.env.get(k) ?? (globalThis as any).process?.env?.[k] ?? d;
 const SB = () => env("SUPABASE_URL");
-const SRK = () => env("SUPABASE_SERVICE_ROLE_KEY");
+// Chave de servidor: aceita a legada (service_role) ou a nova (sb_secret_...).
+const SRK = () => {
+  const legacy = env("SUPABASE_SERVICE_ROLE_KEY");
+  if (legacy) return legacy;
+  try { const m = JSON.parse(env("SUPABASE_SECRET_KEYS", "{}")); return m.default || Object.values(m)[0] || ""; } catch { return ""; }
+};
+const srvHeaders = (): Record<string, string> =>
+  SRK().startsWith("sb_secret_") ? { apikey: SRK() } : { apikey: SRK(), Authorization: "Bearer " + SRK() };
 const MP = () => env("MP_ACCESS_TOKEN");
 const APP = () => env("APP_URL", "https://consultaia.github.io/consultaia-ritmo/");
 const FN = () => SB() + "/functions/v1/ritmo-pagamento";
@@ -23,7 +30,7 @@ async function db(path: string, init: RequestInit = {}) {
   const r = await fetch(SB() + "/rest/v1/" + path, {
     ...init,
     headers: {
-      apikey: SRK(), Authorization: "Bearer " + SRK(), "Content-Type": "application/json",
+      ...srvHeaders(), "Content-Type": "application/json",
       "Accept-Profile": "ritmo", "Content-Profile": "ritmo", Prefer: "return=representation",
       ...(init.headers || {}),
     },
