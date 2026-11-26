@@ -10,8 +10,10 @@ PWA (um `index.html`, sem build) que organiza tarefas, hábitos, metas, lembrete
 ## Estrutura
 | Arquivo | Para quê |
 |---|---|
-| `index.html` | App inteiro (HTML + CSS + JS puro) |
-| `sw.js`, `manifest.json`, `icon-*.png` | Instalação no celular e uso offline |
+| `index.html` | Landing page de vendas (raiz do site) |
+| `assets/*.jpg` | Prints reais do app usados na landing |
+| `app/index.html` | App inteiro (HTML + CSS + JS puro) |
+| `app/sw.js`, `app/manifest.json`, `app/icon-*.png` | Instalação no celular e uso offline |
 | `supabase/migrations/20261126040000_ritmo_schema.sql` | Banco: schema `ritmo` isolado no projeto **dri-imoveis** |
 | `supabase/migrations/20261126050000_ritmo_assinatura.sql` | Planos, assinaturas, pagamentos e bloqueio por vencimento |
 | `supabase/functions/ritmo-pagamento/index.ts` | Checkout Mercado Pago + webhook |
@@ -19,9 +21,9 @@ PWA (um `index.html`, sem build) que organiza tarefas, hábitos, metas, lembrete
 ## Colocar no ar
 1. **Banco (uma vez):** Supabase → dri-imoveis → SQL Editor → cole e rode o arquivo da migration.
 2. **Expor o schema:** Project Settings → Data API → *Exposed schemas* → adicione `ritmo` → Save.
-3. **Chave:** Project Settings → API Keys → copie a *publishable key* (ou `anon`) e cole em `SUPABASE_KEY` no topo da seção "Nuvem" do `index.html`.
+3. **Chave:** Project Settings → API Keys → copie a *publishable key* (ou `anon`) e cole em `SUPABASE_KEY` na seção "Nuvem" do `app/index.html`.
 4. **Login:** Authentication → URL Configuration → em *Redirect URLs* adicione `https://consultaia.github.io/consultaia-ritmo/**`.
-5. **Site:** GitHub → Settings → Pages → Branch `main` / root. Endereço: `https://consultaia.github.io/consultaia-ritmo/`.
+5. **Site:** GitHub → Settings → Pages → Branch `main` / root. Landing: `https://consultaia.github.io/consultaia-ritmo/` · App: `https://consultaia.github.io/consultaia-ritmo/app/` (a landing repassa `?pg=` do Mercado Pago e `?criar`/`?entrar` para o app).
 
 ## Assinatura (multitenant: cada conta é um cliente)
 - Cadastro → **7 dias grátis** sem cartão → planos **Mensal R$ 9,90 · 6 meses R$ 49,90 · Anual R$ 89,90** (tabela `ritmo.planos`; mude preço direto lá).
