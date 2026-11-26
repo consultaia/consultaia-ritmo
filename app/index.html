@@ -1150,7 +1150,7 @@ ajustes(){
     <div class="tt"><div>${esc(t.n||t.sig||k)}</div><div class="mut">${hm(t.s)}–${hm(t.e)} · ${fdur(t.e-t.s)}${t.e>1440?' · vira o dia':''}</div></div><span class="mut">›</span></div>`);
   h+=`<button class="btn sec full" data-a="editShift" style="margin-top:8px">+ Novo turno</button>
     <div class="mut" style="margin-top:6px">Dê o nome e a sigla que usa no seu serviço (ex.: “MT – Manhã/Tarde”, “P12”, “Sobreaviso”).</div></div>`;}
-  h+=`<h2>Perfis neste aparelho</h2><div class="card">${DB.profiles.map((x,i)=>`<div class="item" data-a="editProfile" data-v="${i}"><div class="tt"><div>${i===DB.cur?'● ':''}${esc(x.name)}</div><div class="mut">${MODES[x.mode].i} ${MODES[x.mode].n}</div></div><span class="mut">›</span></div>`).join('')}
+  h+=`<h2>Perfis (agendas separadas)</h2><div class="card">${DB.profiles.map((x,i)=>`<div class="item" data-a="editProfile" data-v="${i}"><div class="tt"><div>${i===DB.cur?'● ':''}${esc(x.name)}</div><div class="mut">${MODES[x.mode].i} ${MODES[x.mode].n}</div></div><span class="mut">›</span></div>`).join('')}
     <button class="btn sec full" data-a="addProfile" style="margin-top:8px">+ Novo perfil</button></div>
   ${avisosCard()}<h2>Aplicativo</h2>${installCard(true)}
   <h2>Backup</h2><div class="card row wrap"><button class="btn sec" data-a="export">Exportar backup</button>
@@ -1594,7 +1594,7 @@ function render(){
   if(wizAtivo()&&!UI.modal){if(document.querySelector('.wiz')&&UI.wiz)wizRead();app.innerHTML=wizHtml();return}
   const tabs=[['hoje','☀️','Hoje'],['semana','🗓️','Semana'],['mes','📆','Mês'],['planos','🎯','Planos'],['painel','📊','Painel'],['ajustes','⚙️','Ajustes']];
   app.innerHTML=`<header><div class="logo">Rit<b>mo</b></div>
-    ${canInstall()?'<button class="btn sm sec hinst" data-a="instalar">📲 Instalar</button>':''}<select data-c="profile" aria-label="Perfil">${DB.profiles.map((x,i)=>`<option value="${i}" ${i===DB.cur?'selected':''}>${MODES[x.mode].i} ${esc(x.name)}</option>`).join('')}</select></header>
+    ${canInstall()?'<button class="btn sm sec hinst" data-a="instalar">📲 Instalar</button>':''}${DB.profiles.length>1?`<select data-c="profile" aria-label="Perfil">${DB.profiles.map((x,i)=>`<option value="${i}" ${i===DB.cur?'selected':''}>${MODES[x.mode].i} ${esc(x.name)}</option>`).join('')}</select>`:''}</header>
     ${subBanner()}<main class="v-${UI.tab}">${VIEWS[UI.tab]()}</main>
     <nav><div class="in"><div class="navlogo">Rit<b>mo</b></div>${tabs.map(([k,i,n])=>`<button class="${UI.tab===k?'on':''}" data-a="tab" data-v="${k}"><span>${i}</span>${n}</button>`).join('')}</div></nav>
     ${UI.modal?`<div class="mask"><div class="sheet">${UI.modal}</div></div>`:'<button class="fab" data-a="capture" aria-label="Anotar">＋</button>'}`;
