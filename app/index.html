@@ -146,6 +146,11 @@ header .hinst{margin-left:auto}header .hinst+select{margin-left:0}
 .cl{font-size:9px;line-height:1.1;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 .paint.locs button{background:#fff;color:var(--ink);border:1px solid var(--line)}.paint.locs button.on{background:var(--pri2);border-color:var(--pri);color:var(--pri);box-shadow:none}
 @media(min-width:1024px){.cl{font-size:11px}}
+.wiz{text-align:left;max-width:520px;padding-top:26px}.wiz h1{font-size:24px;margin:14px 0 8px}.wiz .logo{text-align:center}
+.wdots{display:flex;gap:6px;justify-content:center;margin:14px 0 6px}.wdots i{width:34px;height:5px;border-radius:3px;background:var(--line)}.wdots i.on{background:var(--pri)}
+.wact{display:flex;align-items:center;gap:8px;background:#fff;border:2px solid var(--line);border-radius:12px;padding:10px 12px;margin:6px 0}.wact.on{border-color:var(--pri)}
+.wact label{display:flex;gap:8px;align-items:center}.wact input{width:20px;height:20px}.wact select{border:1px solid var(--line);border-radius:8px;padding:5px;background:#fff}
+@media(min-width:1024px){body:has(.gate){padding-left:0}}
 </style>
 </head>
 <body>
@@ -221,7 +226,7 @@ function newProfile(name,mode){mode=MODES[mode]?mode:'escala';return fixProfile(
 function fixProfile(p){
   p.mode=MODES[p.mode]?p.mode:'escala';p.tasks=p.tasks||[];p.habits=p.habits||[];p.hlog=p.hlog||{};
   p.top=p.top||{};p.notes=p.notes||{};p.goals=p.goals||{};p.plan=p.plan||{};p.shifts=p.shifts||{};
-  p.shiftTypes=p.shiftTypes||clone(DEFAULT_SHIFTS);Object.entries(p.shiftTypes).forEach(([k,t])=>{if(!t.sig)t.sig=k});p.acts=p.acts||[];p.reminders=p.reminders||[];p.expenses=p.expenses||[];p.locais=p.locais||[];p.sloc=p.sloc||{};p.sval=p.sval||{};p.spago=p.spago||{};return p;
+  p.shiftTypes=p.shiftTypes||clone(DEFAULT_SHIFTS);Object.entries(p.shiftTypes).forEach(([k,t])=>{if(!t.sig)t.sig=k});p.acts=p.acts||[];p.reminders=p.reminders||[];p.expenses=p.expenses||[];p.nomeEscala=p.nomeEscala||'';p.locais=p.locais||[];p.sloc=p.sloc||{};p.sval=p.sval||{};p.spago=p.spago||{};return p;
 }
 function load(){
   try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.profiles&&d.profiles.length){d.profiles.forEach(fixProfile);return d}}catch(e){}
@@ -240,7 +245,7 @@ function prune(p){
 let DB=load();DB.profiles.forEach(prune);
 (function(){const m=DB.meta=DB.meta||{};if(m.be!=='jtkk'){delete m.uid;delete m.rev;m.be='jtkk';m.dirty=true;try{localStorage.removeItem('ritmo.base')}catch(e){}}})();
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){alert('Não foi possível salvar no aparelho.')}}
-function save(){DB.meta=DB.meta||{};DB.meta.dirty=true;persist();if(typeof cloudPush==='function')cloudPush()}
+function save(){DB.meta=DB.meta||{};DB.meta.dirty=true;persist();if(typeof cacheAvisos==='function')cacheAvisos();if(typeof cloudPush==='function')cloudPush()}
 const P=()=>DB.profiles[DB.cur]||DB.profiles[0];
 
 /* ===================== Nuvem (Supabase ConsultaIA · tabelas ritmo_) ===================== */
@@ -336,8 +341,9 @@ async function cloudPull(){
     else adoptRemote(remote,merge3(novoAqui?undefined:getBase(),DB.profiles,remote.dados.profiles));
     if(DB.meta.dirty&&subAtivo())await cloudPush(true);
     else{CLOUD.status='ok';CLOUD.last=new Date()}
+    cacheAvisos();syncAvisos();CLOUD.pulled=true;
     if(!UI.modal)render();
-  }catch(e){CLOUD.status='erro';CLOUD.err=e.message;if(!UI.modal)render()}
+  }catch(e){CLOUD.status='erro';CLOUD.err=e.message;CLOUD.pulled=true;if(!UI.modal)render()}
 }
 /* O aparelho tem algo além do perfil padrão recém-criado? */
 function usado(){return DB.profiles.length>1||DB.profiles.some(p=>p.tasks.length||p.reminders.length||p.expenses.length||Object.keys(p.plan).length||Object.keys(p.shifts).length||Object.keys(p.notes).length||Object.keys(p.hlog).length)}
@@ -353,7 +359,7 @@ async function cloudPush(now,again){
       try{rows=await rest('POST','?select=rev',{user_id:uid,...body})}catch(e){if(e.status===409)conflito=true;else throw e}
     }else{rows=await rest('PATCH','?select=rev&user_id=eq.'+uid+'&rev=eq.'+DB.meta.rev,body);if(!rows||!rows.length)conflito=true}
     if(!conflito){DB.meta.rev=rows[0].rev;CLOUD.base=snap;try{if(snap.length<1200000)localStorage.setItem(BKEY,snap)}catch(e){}
-      DB.meta.dirty=JSON.stringify(DB.profiles)!==snap;persist();CLOUD.status='ok';CLOUD.last=new Date();if(DB.meta.dirty)CLOUD.timer=setTimeout(()=>cloudPush(true),1500)}
+      DB.meta.dirty=JSON.stringify(DB.profiles)!==snap;persist();CLOUD.status='ok';CLOUD.last=new Date();syncAvisos();if(DB.meta.dirty)CLOUD.timer=setTimeout(()=>cloudPush(true),1500)}
   }catch(e){CLOUD.status='erro';CLOUD.err=e.status===403?'assinatura vencida':/2097152|tamanho/.test(e.message)?'limite de espaço atingido':e.message}
   CLOUD.busy=false;
   if(conflito&&!again){await cloudPull();return}
@@ -378,7 +384,7 @@ async function loadSub(){
 }
 async function loadPlanos(){
   if(CLOUD.planos)return CLOUD.planos;
-  const r=await fetch(SUPABASE_URL+'/rest/v1/ritmo_planos?select=id,nome,valor,dias&order=ordem',{headers:{apikey:SUPABASE_KEY}});
+  const r=await fetch(SUPABASE_URL+'/rest/v1/ritmo_planos?select=id,nome,valor,dias,pessoas&order=ordem',{headers:{apikey:SUPABASE_KEY}});
   if(!r.ok)throw new Error('HTTP '+r.status);return CLOUD.planos=await r.json();
 }
 async function irPagar(plano){
@@ -395,11 +401,12 @@ async function aguardarLiberacao(){
   render();toast('Pagamento em análise. A liberação chega assim que o Mercado Pago confirmar.');
 }
 function planosHtml(lista){
-  const mens=lista.find(x=>x.id==='mensal');
-  return`<div class="plans">${lista.map(pl=>{const pm=pl.valor/(pl.dias/30.4),eco=mens&&pl.id!=='mensal'?Math.round((1-pm/mens.valor)*100):0;
-    return`<button class="plan ${pl.id==='anual'?'best':''}" data-a="pagar" data-v="${esc(pl.id)}">${pl.id==='anual'?'<span class="tag">Mais escolhido</span>':''}
-      <b>${esc(pl.nome)}</b><big>${brl(pl.valor)}</big><small>${pl.id==='mensal'?'por mês':'≈ '+brl(pm)+'/mês'}${eco>0?` · economize ${eco}%`:''}</small></button>`}).join('')}</div>
-    <div class="mut" style="text-align:center;margin-top:8px">Pix ou cartão pelo Mercado Pago · sem renovação automática · libera na hora</div>`;
+  const casal=!!UI.casal,temCasal=lista.some(x=>(x.pessoas||1)>1),grupo=lista.filter(x=>((x.pessoas||1)>1)===casal),mens=grupo.find(x=>x.dias<=31);
+  return`${temCasal?`<div class="segm"><button class="${casal?'':'on'}" data-a="planoTipo" data-v="">👤 Só eu</button><button class="${casal?'on':''}" data-a="planoTipo" data-v="1">👥 Casal (2 contas)</button></div>`:''}
+    <div class="plans">${grupo.map(pl=>{const pm=pl.valor/(pl.dias/30.4),eco=mens&&pl!==mens?Math.round((1-pm/mens.valor)*100):0,best=pl.dias>=365;
+    return`<button class="plan ${best?'best':''}" data-a="pagar" data-v="${esc(pl.id)}">${best?'<span class="tag">Mais escolhido</span>':''}
+      <b>${esc(pl.nome)}</b><big>${brl(pl.valor)}</big><small>${pl===mens?'por mês':'≈ '+brl(pm)+'/mês'}${casal?' · '+brl(pm/2)+' por pessoa':''}${eco>0?` · economize ${eco}%`:''}</small></button>`}).join('')}</div>
+    <div class="mut" style="text-align:center;margin-top:8px">${casal?'Você paga e libera mais uma pessoa pelo e-mail dela. Cada uma com a própria conta e agenda.<br>':''}Pix ou cartão pelo Mercado Pago · sem renovação automática · libera na hora</div>`;
 }
 function gateHtml(){
   return`<div class="gate"><div class="logo" style="font-size:34px">Rit<b>mo</b></div>
@@ -430,7 +437,8 @@ function subBanner(){
 }
 function subLinha(){const x=CLOUD.sub;if(!x)return'';
   const ate=x.fim?dmy(x.fim.slice(0,10)):'';
-  return x.fase==='pago'?`✅ Plano ${esc(x.plano||'')} até ${ate}`:x.fase==='teste'?`🎁 Teste grátis até ${ate}`:'⛔ Vencido'}
+  const nomes={mensal:'mensal',semestral:'de 6 meses',anual:'anual',casal_mensal:'Casal mensal',casal_anual:'Casal anual',casal:'Casal (convidado)'};
+  return x.fase==='pago'?`✅ Plano ${esc(nomes[x.plano]||x.plano||'')} até ${ate}`:x.fase==='teste'?`🎁 Teste grátis até ${ate}`:'⛔ Vencido'}
 /* ===================== Motor de distribuição ===================== */
 const isPlanner=p=>p.mode!=='escala';
 function shiftOf(p,s){if(isPlanner(p))return null;const k=p.shifts[s];if(!k||!p.shiftTypes[k])return null;const t=p.shiftTypes[k],loc=(p.locais||[]).find(l=>l.id===(p.sloc||{})[s])||null;
@@ -610,19 +618,71 @@ function parseNL(raw,base){
 /* Lembretes: avisa com o app aberto; com o sw.js instalado, usa notificação do sistema */
 let SWREG=null;
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').then(r=>SWREG=r).catch(()=>{});
-function notify(title,body){
+function notify(title,body,tag){
   try{if(window.Notification&&Notification.permission==='granted'){
-    if(SWREG)SWREG.showNotification(title,{body,icon:ICON,badge:ICON,vibrate:[200,100,200],tag:title+body});
+    if(SWREG)SWREG.showNotification(title,{body,icon:ICON,badge:ICON,vibrate:[200,100,200],tag:tag||title+body});
     else new Notification(title,{body,icon:ICON});}}catch(e){}
-  toast('⏰ '+body);try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}
+  toast(body);try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}
 }
+function repBate(r,d){const o=parse(r.date);return r.rep==='dia'||(r.rep==='semana'&&o.getDay()===d.getDay())||(r.rep==='mes'&&o.getDate()===d.getDate())}
 function checkReminders(){
   const now=new Date(),key=ds(now),nm=now.getHours()*60+now.getMinutes();let ch=false;
   DB.profiles.forEach(p=>(p.reminders||[]).forEach(r=>{
-    if(r.done||r.notified)return;
-    if(r.date<key||(r.date===key&&r.time<=nm)){r.notified=true;ch=true;notify('Ritmo · '+p.name,r.t)}
+    if(r.done)return;
+    if(r.rep){if(r.date<=key&&repBate(r,now)&&r.time<=nm&&r.lastN!==key){r.lastN=key;r.notified=true;ch=true;notify('Ritmo','⏰ '+r.t,'rem-'+r.id)}return}
+    if(r.notified)return;
+    if(r.date<key||(r.date===key&&r.time<=nm)){r.notified=true;ch=true;notify('Ritmo','⏰ '+r.t,'rem-'+r.id)}
   }));
   if(ch){save();if(!UI.modal)render()}
+}
+/* ---- Avisos com o app fechado (push) ---- */
+const PKEY='ritmo.push';
+const pushSuportado=()=>'serviceWorker'in navigator&&'PushManager'in window&&'Notification'in window;
+const pushLigado=()=>{try{return localStorage.getItem(PKEY)==='1'&&Notification.permission==='granted'}catch(e){return false}};
+function listaAvisos(){const out=[];DB.profiles.forEach(p=>(p.reminders||[]).forEach(r=>{if(!r.done)out.push({id:r.id,t:r.t,date:r.date,time:r.time,rep:r.rep||''})}));return out}
+/* o service worker lê esta lista para montar a notificação quando o push chega */
+function cacheAvisos(){try{if(window.caches)caches.open('ritmo-dados').then(c=>c.put('avisos.json',new Response(JSON.stringify(listaAvisos()),{headers:{'Content-Type':'application/json'}}))).catch(()=>{})}catch(e){}}
+function proximoAviso(r,now){
+  let d=new Date(parse(r.date).getTime()+r.time*60000);
+  if(!r.rep)return d>now?d:null;
+  for(let i=0;i<800&&d<=now;i++){const o=parse(ds(d));d=new Date((r.rep==='dia'?addDays(o,1):r.rep==='semana'?addDays(o,7):new Date(o.getFullYear(),o.getMonth()+1,parse(r.date).getDate())).getTime()+r.time*60000)}
+  return d>now?d:null;
+}
+let AV_HASH=null;
+async function syncAvisos(force){
+  if(!CLOUD_ON||!CLOUD.session||!pushLigado())return;
+  const now=new Date(),l=listaAvisos().map(r=>{const q=proximoAviso(r,now);return q?{id:r.id,quando:q.toISOString(),rep:r.rep}:null}).filter(Boolean);
+  const h=JSON.stringify(l);if(!force&&h===AV_HASH)return;
+  try{await rpc('ritmo_sync_avisos',{p:l});AV_HASH=h}catch(e){}
+}
+const b64uToU8=s=>{const b=atob(s.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((s.length+3)%4));return Uint8Array.from(b,c=>c.charCodeAt(0))};
+async function pushAtivar(){
+  if(!window.Notification){toast('Este navegador não mostra notificações.');return}
+  if(isIOS()&&!isStandalone()){openModal(`<h3>Avisos no iPhone</h3><p>No iPhone, as notificações só funcionam com o Ritmo <b>instalado na Tela de Início</b>.</p>
+    <div class="row" style="margin-top:12px"><button class="btn ghost" data-a="close">Agora não</button><span class="sp"></span><button class="btn" data-a="instalar">Ver como instalar</button></div>`);return}
+  const perm=await Notification.requestPermission().catch(()=>'denied');
+  if(perm!=='granted'){toast('Notificações bloqueadas. Libere nas configurações do navegador.');render();return}
+  if(!CLOUD_ON||!CLOUD.session||!pushSuportado()||!SWREG){toast('🔔 Avisos ativados enquanto o app estiver aberto.');render();return}
+  try{
+    const r=await fetch(SUPABASE_URL+'/functions/v1/ritmo-push/chave',{headers:{apikey:SUPABASE_KEY}}),j=await r.json();if(!j.chave)throw 0;
+    let sub=await SWREG.pushManager.getSubscription();
+    if(!sub)sub=await SWREG.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uToU8(j.chave)});
+    await rpc('ritmo_push_inscrever',{p_endpoint:sub.endpoint});
+    try{localStorage.setItem(PKEY,'1')}catch(e){}
+    cacheAvisos();await syncAvisos(true);toast('🔔 Pronto! Você será avisado mesmo com o app fechado.');
+  }catch(e){toast('🔔 Avisos ativados só com o app aberto (este aparelho não aceitou o push).')}
+  render();
+}
+async function pushDesativar(){
+  try{const sub=SWREG&&await SWREG.pushManager.getSubscription();if(sub){await rpc('ritmo_push_sair',{p_endpoint:sub.endpoint}).catch(()=>{});await sub.unsubscribe()}}catch(e){}
+  try{localStorage.removeItem(PKEY)}catch(e){}toast('Avisos com o app fechado desligados neste aparelho.');render();
+}
+function avisosCard(){
+  if(!window.Notification)return'';
+  const on=pushLigado(),perm=Notification.permission;
+  return`<h2>Avisos</h2><div class="card"><div class="row"><span style="font-size:26px">🔔</span><div class="sp"><b>${on?'Avisos ligados neste aparelho':perm==='granted'?'Avisos só com o app aberto':'Avisos desligados'}</b>
+    <div class="mut">${on?'Você recebe os lembretes mesmo com o Ritmo fechado.':'Ative para receber os lembretes mesmo com o Ritmo fechado.'}</div></div></div>
+    <div class="row wrap" style="margin-top:10px">${on?'<button class="btn sm ghost" data-a="pushOff">Desligar</button>':'<button class="btn sm" data-a="notifOn">Ativar avisos</button>'}</div></div>`;
 }
 function toast(msg){let el=document.getElementById('toast');if(!el){el=document.createElement('div');el.id='toast';document.body.appendChild(el)}
   el.textContent=msg;el.className='show';clearTimeout(el._t);el._t=setTimeout(()=>el.className='',4500)}
@@ -672,6 +732,106 @@ function otherHelp(){
     <li><b>Computador (Chrome ou Edge):</b> clique no ícone de instalar <b>⊕</b> na barra de endereço, ou menu → <b>Instalar Ritmo</b>.</li>
     <li><b>iPhone:</b> Safari → <b>Compartilhar ⬆︎</b> → <b>Adicionar à Tela de Início</b>.</li></ol>
     <div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn" data-a="close">Entendi</button></div>`);
+}
+/* ===================== Boas-vindas guiadas ===================== */
+const WIZ_ACTS=[
+  {name:'Academia',cat:'treino',per:3,dur:60,period:'manha',onlyOff:false,on:1},
+  {name:'Caminhada',cat:'treino',per:3,dur:40,period:'any',onlyOff:false,on:0},
+  {name:'Faxina pesada',cat:'casa',per:1,dur:120,period:'manha',onlyOff:true,on:1},
+  {name:'Lavar e passar roupa',cat:'casa',per:2,dur:60,period:'any',onlyOff:false,on:1},
+  {name:'Mercado / feira',cat:'casa',per:1,dur:90,period:'tarde',onlyOff:false,on:1},
+  {name:'Estudo',cat:'estudo',per:3,dur:60,period:'noite',onlyOff:false,on:0},
+  {name:'Lazer em família',cat:'lazer',per:1,dur:180,period:'tarde',onlyOff:true,on:1},
+  {name:'Leitura',cat:'pessoal',per:3,dur:30,period:'noite',onlyOff:false,on:0}
+];
+function wizAtivo(){return UI.wiz!==false&&!DB.seen&&(!CLOUD_ON||CLOUD.pulled)&&!usado()}
+function wizInit(){const e=(CLOUD.session&&CLOUD.session.email||'').split('@')[0].split(/[._\-0-9]/)[0]||'';
+  UI.wiz={step:0,nome:e?e.charAt(0).toUpperCase()+e.slice(1):'',mode:'escala',padrao:'12x36d',inicio:todayS(),wake:360,sleep:1380,ws:480,we:1080,wd:[1,2,3,4,5],acts:WIZ_ACTS.map(a=>({...a}))}}
+function wizHtml(){
+  if(!UI.wiz)wizInit();const w=UI.wiz;let c='';
+  if(w.step===0)c=`<h1>Bem-vindo ao Ritmo 👋</h1><p class="mut">3 perguntas rápidas e a sua semana sai pronta.</p>
+    <label class="field"><span>Como podemos te chamar?</span><input id="w-n" value="${esc(w.nome)}" placeholder="Seu nome"></label>
+    <div class="field"><span>Como é a sua rotina de trabalho?</span>${Object.entries(MODES).map(([k,m])=>`<button class="modeopt ${w.mode===k?'on':''}" data-a="wizMode" data-v="${k}"><b>${m.i} ${m.n}</b><small>${m.d}</small></button>`).join('')}</div>`;
+  else if(w.step===1)c=`<h1>${w.mode==='escala'?'Sua escala':w.mode==='fixo'?'Seu horário':'Seu dia'}</h1>
+    ${w.mode==='escala'?`<label class="field"><span>Qual o padrão dos seus plantões?</span><select id="w-p">${Object.entries(PATTERNS).filter(([k])=>k!=='custom').map(([k,v])=>`<option value="${k}" ${w.padrao===k?'selected':''}>${v.n}</option>`).join('')}<option value="" ${!w.padrao?'selected':''}>Não tem padrão: vou marcar no calendário</option></select></label>
+      <label class="field"><span>Quando é o seu próximo plantão?</span><input id="w-i" type="date" value="${w.inicio}"></label>
+      <div class="mut">Depois você ajusta dia a dia, importa por foto ou cria turnos com os nomes do seu serviço.</div>`:''}
+    ${w.mode==='fixo'?`<div class="field"><span>Dias de trabalho ou aula</span><div class="wd">${[1,2,3,4,5,6,0].map(i=>`<label><input type="checkbox" class="w-d" value="${i}" ${w.wd.includes(i)?'checked':''}>${DOW[i]}</label>`).join('')}</div></div>
+      <div class="grid2"><label class="field"><span>Começa</span><input id="w-ws" type="time" value="${hm(w.ws)}"></label><label class="field"><span>Termina</span><input id="w-we" type="time" value="${hm(w.we)}"></label></div>`:''}
+    <div class="grid2"><label class="field"><span>Costuma acordar</span><input id="w-wk" type="time" value="${hm(w.wake)}"></label><label class="field"><span>Costuma dormir</span><input id="w-sl" type="time" value="${hm(w.sleep)}"></label></div>`;
+  else c=`<h1>O que você quer encaixar na semana?</h1><p class="mut">Marque e ajuste quantas vezes por semana. Dá para mudar tudo depois.</p>
+    ${w.acts.map((a,i)=>`<div class="wact ${a.on?'on':''}"><label class="sp"><input type="checkbox" class="w-a" data-i="${i}" ${a.on?'checked':''}> ${(CATS[a.cat]||CATS.pessoal).i} ${esc(a.name)}</label>
+      <select class="w-f" data-i="${i}">${[1,2,3,4,5,6,7].map(n=>`<option ${a.per===n?'selected':''}>${n}</option>`).join('')}</select><span class="mut">x/sem</span></div>`).join('')}`;
+  return`<div class="gate wiz"><div class="logo" style="font-size:26px">Rit<b>mo</b></div>
+    <div class="wdots">${[0,1,2].map(i=>`<i class="${i<=w.step?'on':''}"></i>`).join('')}</div>
+    <div class="wbody">${c}</div>
+    <div class="row" style="margin-top:18px">${w.step?'<button class="btn ghost" data-a="wizBack">Voltar</button>':'<button class="btn ghost" data-a="wizSkip">Pular</button>'}<span class="sp"></span>
+    <button class="btn" data-a="wizNext">${w.step===2?'⚡ Montar minha semana':'Continuar'}</button></div></div>`;
+}
+function wizRead(){const w=UI.wiz,g=id=>document.getElementById(id);
+  if(g('w-n'))w.nome=g('w-n').value.trim();
+  if(g('w-p'))w.padrao=g('w-p').value;if(g('w-i'))w.inicio=g('w-i').value||todayS();
+  if(g('w-ws')){w.ws=toMin(g('w-ws').value);w.we=toMin(g('w-we').value);w.wd=[...document.querySelectorAll('.w-d:checked')].map(x=>+x.value)}
+  if(g('w-wk')){w.wake=toMin(g('w-wk').value);w.sleep=toMin(g('w-sl').value)||1440}
+  document.querySelectorAll('.w-a').forEach(x=>{w.acts[+x.dataset.i].on=x.checked?1:0});
+  document.querySelectorAll('.w-f').forEach(x=>{w.acts[+x.dataset.i].per=+x.value});
+}
+function wizFinish(){
+  const w=UI.wiz,p=newProfile(w.nome||'Eu',w.mode);
+  p.settings.wake=w.wake;p.settings.sleep=w.sleep>w.wake?w.sleep:1380;
+  if(w.mode==='fixo'){p.settings.work={on:true,days:w.wd.length?w.wd:[1,2,3,4,5],s:w.ws,e:w.we>w.ws?w.we:w.ws+480}}
+  if(w.mode==='escala'&&w.padrao&&PATTERNS[w.padrao]){const seq=PATTERNS[w.padrao].seq;for(let i=0;i<120;i++){const c=seq[i%seq.length];if(c!=='-')p.shifts[ds(addDays(parse(w.inicio),i))]=c}}
+  p.acts=w.acts.filter(a=>a.on).map(a=>({id:uid(),name:a.name,cat:a.cat,per:a.per,dur:a.dur,period:a.period,onlyOff:a.onlyOff,on:true}));
+  DB.profiles=[p];DB.cur=0;DB.seen=true;
+  /* se hoje já é domingo à noite, monta a semana que vem */
+  let mon=mondayOf(new Date());const r0=distribute(p,mon);if(!r0.placed){mon=addDays(mon,7);distribute(p,mon)}
+  UI.week=ds(mon);UI.wiz=false;UI.tab='semana';
+  UI.msg=`<div class="okmsg"><b>Sua semana está montada, ${esc(p.name)}!</b> Toque num bloco para ajustar. Use o ＋ para anotar tarefas, lembretes e gastos falando ou escrevendo.</div>`;
+  save();render();window.scrollTo(0,0);
+}
+/* ===================== Escala por foto ===================== */
+function fotoModal(){
+  const p=P();
+  openModal(`<h3>📷 Importar escala por foto</h3><p class="mut">Tire uma foto reta e nítida da escala do mês (ou escolha uma imagem ou print). A IA lê os seus plantões e você confere antes de salvar.</p>
+    <label class="field"><span>Seu nome como aparece na escala</span><input id="fo-n" value="${esc(p.nomeEscala||'')}" placeholder="Ex.: JANAN ou Dr. Almeida (deixe vazio se a escala é só sua)"></label>
+    <label class="btn full" style="cursor:pointer">📷 Tirar foto ou escolher imagem<input type="file" accept="image/*" data-c="fotoEscala" hidden></label>
+    <div id="fo-msg" class="mut" style="margin-top:8px">Mês de referência: ${MES[parse(UI.month).getMonth()]} de ${parse(UI.month).getFullYear()}.</div>
+    <div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn ghost" data-a="close">Cancelar</button></div>`);
+}
+function reduzirImagem(file,max){return new Promise((ok,err)=>{const img=new Image(),u=URL.createObjectURL(file);
+  img.onload=()=>{const k=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);ok(c.toDataURL('image/jpeg',.82).split(',')[1])};
+  img.onerror=()=>{URL.revokeObjectURL(u);err(new Error('imagem'))};img.src=u})}
+async function lerEscala(file){
+  const p=P(),msg=document.getElementById('fo-msg'),nome=(document.getElementById('fo-n')||{}).value||'';
+  p.nomeEscala=nome.trim();
+  try{
+    if(msg)msg.textContent='Preparando a imagem…';
+    const b64=await reduzirImagem(file,1800),m=parse(UI.month);
+    if(msg)msg.textContent='Lendo a escala… pode levar alguns segundos.';
+    const t=await token(),r=await fetch(SUPABASE_URL+'/functions/v1/ritmo-escala',{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+t,'Content-Type':'application/json'},
+      body:JSON.stringify({imagem:b64,mime:'image/jpeg',nome:p.nomeEscala,siglas:Object.entries(p.shiftTypes).map(([k,x])=>x.sig||k),mes:m.getMonth()+1,ano:m.getFullYear()})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok){if(msg)msg.innerHTML=`<span style="color:var(--bad)">${esc(j.erro||'Não foi possível ler a imagem.')}</span>`;return}
+    if(!j.achou||!j.dias.length){if(msg)msg.innerHTML=`<span style="color:var(--bad)">Não encontrei plantões${p.nomeEscala?' para “'+esc(p.nomeEscala)+'”':''} nessa foto. Confira o nome e tente uma foto mais nítida.</span>`;return}
+    UI.foto=j;fotoRevisao();
+  }catch(e){if(msg)msg.innerHTML='<span style="color:var(--bad)">Não foi possível enviar a imagem. Confira a internet e tente de novo.</span>'}
+}
+function siglaPara(p,sig){const S=String(sig).toUpperCase(),tipos=Object.entries(p.shiftTypes);
+  let k=(tipos.find(([k,t])=>String(t.sig||k).toUpperCase()===S)||[])[0];if(k)return k;
+  const ali={D:'SD',DIA:'SD',N:'SN',NOITE:'SN',MAN:'M',TAR:'T',P:'SD',24:'P24',P24:'P24',PL:'SD',12:'SD'}[S];
+  return ali&&p.shiftTypes[ali]?ali:'';
+}
+function fotoRevisao(){
+  const p=P(),j=UI.foto,sigs=[...new Set(j.dias.map(d=>d.sigla))];
+  openModal(`<h3>Confira a escala lida</h3><div class="okmsg">Encontrei <b>${j.dias.length} plantões</b> em <b>${MES[j.mes-1]||''} de ${j.ano}</b>${j.nome_lido?' para <b>'+esc(j.nome_lido)+'</b>':''}.</div>
+    <div class="field"><span>Cada sigla da foto corresponde a qual turno seu?</span>${sigs.map(sg=>{const k=siglaPara(p,sg);return`<div class="row" style="margin:6px 0"><span class="chip wk" style="min-width:52px;justify-content:center">${esc(sg)}</span><span class="mut">→</span>
+      <select class="inl sp fo-map" data-s="${esc(sg)}"><option value="">Ignorar</option>${Object.entries(p.shiftTypes).map(([kk,t])=>`<option value="${kk}" ${k===kk?'selected':''}>${esc(t.sig||kk)} · ${esc(t.n||'')}</option>`).join('')}</select></div>`}).join('')}</div>
+    ${p.locais.length?`<label class="field"><span>Local desses plantões</span><select id="fo-l"><option value="">Sem local</option>${p.locais.map(l=>`<option value="${l.id}" ${UI.ploc===l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}</select></label>`:''}
+    <div class="mut">Dias: ${j.dias.map(d=>`${d.dia} (${esc(d.sigla)})`).join(', ')}</div>
+    <label class="toggle"><input id="fo-z" type="checkbox" checked> Substituir a escala que já está nesse mês</label>
+    <div class="mut">A leitura pode errar: confira os dias no calendário depois de salvar.</div>
+    <div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn ghost" data-a="close">Cancelar</button><button class="btn" data-a="fotoAplicar">Salvar na escala</button></div>`);
 }
 /* ===================== Estatísticas ===================== */
 function dayStats(p,s){
@@ -790,7 +950,7 @@ hoje(){
   const rem=p.reminders.filter(r=>!r.done&&r.date<=ds(addDays(new Date(),1))).sort((a,b)=>(a.date+hm(a.time)).localeCompare(b.date+hm(b.time)));
   h+=`<div class="card brief"><div class="row"><h3 class="sp" style="margin:0">☀️ Resumo do dia</h3><button class="btn sm ghost" data-a="briefToggle">${UI.brief?'ocultar':'mostrar'}</button></div>
     ${UI.brief?`<pre>${esc(briefing(p,s))}</pre><div class="row wrap"><button class="btn sm" data-a="briefWa">📲 Mandar no WhatsApp</button>
-    ${window.Notification&&Notification.permission!=='granted'?`<button class="btn sm sec" data-a="notifOn">🔔 Ativar avisos</button>`:''}</div>`:''}</div>`;
+    ${window.Notification&&!pushLigado()&&!(Notification.permission==='granted'&&!CLOUD_ON)?`<button class="btn sm sec" data-a="notifOn">🔔 Ativar avisos</button>`:''}</div>`:''}</div>`;
   if(rem.length)h+=`<div class="card"><div class="row"><h3 class="sp">⏰ Lembretes</h3><button class="btn sm ghost" data-a="goSub" data-v="lembretes">todos ›</button></div>${rem.map(r=>remRow(r)).join('')}</div>`;
   h+=installCard(false);
   h+=`<div class="card row">${ring(pct,'var(--ok)')}<div class="sp"><div>${shiftChip(st.c)}</div>
@@ -839,7 +999,7 @@ mes(){
   let h=`<div class="row" style="margin-top:12px"><button class="btn ghost" data-a="mo" data-v="-1">‹</button>
     <h2 class="sp" style="text-align:center;margin:0">${MES[mo]} ${y}</h2><button class="btn ghost" data-a="mo" data-v="1">›</button></div>`;
   if(esca){
-    h+=`<div class="card"><div class="row"><h3 class="sp" style="margin:0">Pintar escala</h3><button class="btn sm sec" data-a="pattern">Gerar padrão</button></div>
+    h+=`<div class="card"><div class="row"><h3 class="sp" style="margin:0">Pintar escala</h3>${CLOUD_ON?'<button class="btn sm sec" data-a="foto">📷 Por foto</button>':''}<button class="btn sm sec" data-a="pattern">Gerar padrão</button></div>
     <div class="mut" style="margin:4px 0">Escolha o tipo e toque nos dias.</div><div class="paint">`;
     Object.entries(p.shiftTypes).forEach(([k,t])=>h+=`<button class="${UI.paint===k?'on':''}" style="background:${t.c}" data-a="paint" data-v="${k}" title="${esc(t.n||'')}">${esc(t.sig||k)}</button>`);
     h+=`<button class="${UI.paint==='-'?'on':''}" style="background:#10b981" data-a="paint" data-v="-">Folga</button></div>
@@ -958,7 +1118,10 @@ ajustes(){
   const p=P(),st=p.settings,esca=p.mode==='escala';
   let h='';
   if(CLOUD_ON)h+=CLOUD.session?`<h2>Conta</h2><div class="card"><div class="row"><div class="sp"><b>${esc(CLOUD.session.email||'')}</b><div class="mut">${subLinha()}</div><div class="mut" id="cloudst">${cloudBadge()}</div></div>
-      <button class="btn sm sec" data-a="syncNow">Sincronizar</button></div><div class="row wrap" style="margin-top:8px"><button class="btn sm" data-a="planos">${CLOUD.sub&&CLOUD.sub.fase==='pago'?'Renovar / estender':'Assinar'}</button><button class="btn sm ghost" data-a="logout">Sair desta conta</button></div></div>`
+      <button class="btn sm sec" data-a="syncNow">Sincronizar</button></div><div class="row wrap" style="margin-top:8px"><button class="btn sm" data-a="planos">${CLOUD.sub&&CLOUD.sub.fase==='pago'?'Renovar / estender':'Assinar'}</button><button class="btn sm ghost" data-a="logout">Sair desta conta</button></div>
+      ${CLOUD.sub&&CLOUD.sub.casal?`<div class="field" style="margin-top:12px"><span>👥 Plano Casal: e-mail de quem divide com você</span><div class="row"><input class="inl sp" id="par-e" type="email" inputmode="email" placeholder="email@da-pessoa.com" value="${esc(CLOUD.sub.parceiro||'')}"><button class="btn sm" data-a="parSalvar">Salvar</button></div>
+        <div class="mut" style="margin-top:4px">${CLOUD.sub.parceiro?'Essa pessoa entra no Ritmo com esse e-mail e já fica liberada. Para trocar, salve outro; para remover, apague e salve.':'A pessoa cria a conta dela no Ritmo com esse e-mail e fica liberada enquanto seu plano valer.'}</div></div>`:''}
+      ${CLOUD.sub&&CLOUD.sub.convidado?'<div class="mut" style="margin-top:8px">👥 Sua conta está liberada por um plano Casal.</div>':''}</div>`
     :`<h2>Conta</h2><div class="card"><div class="mut" style="margin-bottom:8px">Entre para guardar tudo na nuvem e usar no celular e no computador.</div>
       <button class="btn full" data-a="login">Entrar ou criar conta</button></div>`;
   h+=`<h2>Perfil</h2><div class="card"><label class="field"><span>Nome</span><input value="${esc(p.name)}" data-c="pname"></label>
@@ -989,7 +1152,7 @@ ajustes(){
     <div class="mut" style="margin-top:6px">Dê o nome e a sigla que usa no seu serviço (ex.: “MT – Manhã/Tarde”, “P12”, “Sobreaviso”).</div></div>`;}
   h+=`<h2>Perfis neste aparelho</h2><div class="card">${DB.profiles.map((x,i)=>`<div class="item" data-a="editProfile" data-v="${i}"><div class="tt"><div>${i===DB.cur?'● ':''}${esc(x.name)}</div><div class="mut">${MODES[x.mode].i} ${MODES[x.mode].n}</div></div><span class="mut">›</span></div>`).join('')}
     <button class="btn sec full" data-a="addProfile" style="margin-top:8px">+ Novo perfil</button></div>
-  <h2>Aplicativo</h2>${installCard(true)}
+  ${avisosCard()}<h2>Aplicativo</h2>${installCard(true)}
   <h2>Backup</h2><div class="card row wrap"><button class="btn sec" data-a="export">Exportar backup</button>
     <label class="btn sec">Importar backup<input type="file" accept=".json" data-c="import" hidden></label></div>
   <p class="mut" style="text-align:center"><a href="../termos.html" target="_blank">Termos de Uso</a> · <a href="../privacidade.html" target="_blank">Privacidade</a></p>
@@ -1192,6 +1355,19 @@ const split=v=>String(v).split('|');
 function addTask(title){const t=String(title||'').trim();if(!t)return false;P().tasks.push({id:uid(),t,cat:'pessoal',prio:'media',dur:30,due:'',period:'any',done:false,created:todayS()});return true}
 function addGoal(title){const t=String(title||'').trim();if(!t)return false;const k=UI.month.slice(0,7),p=P();(p.goals[k]=p.goals[k]||[]).push({id:uid(),t,done:false});return true}
 const A={
+  wizMode:v=>{wizRead();UI.wiz.mode=v;render()},
+  wizNext:()=>{wizRead();if(UI.wiz.step<2){UI.wiz.step++;render();window.scrollTo(0,0)}else wizFinish()},
+  wizBack:()=>{wizRead();UI.wiz.step--;render()},
+  wizSkip:()=>{UI.wiz=false;DB.seen=false;render()},
+  foto:()=>{if(!CLOUD_ON||!CLOUD.session){toast('Entre na sua conta para importar por foto.');return}fotoModal()},
+  fotoAplicar:()=>{const p=P(),j=UI.foto,map={};document.querySelectorAll('.fo-map').forEach(x=>map[x.dataset.s]=x.value);
+    const loc=(document.getElementById('fo-l')||{}).value||'',pre=j.ano+'-'+pad(j.mes)+'-',ult=new Date(j.ano,j.mes,0).getDate();
+    if(document.getElementById('fo-z').checked)Object.keys(p.shifts).forEach(d=>{if(d.startsWith(pre)){delete p.shifts[d];delete p.sloc[d];delete p.sval[d];delete p.spago[d]}});
+    let n=0;j.dias.forEach(d=>{const k=map[d.sigla];if(!k||d.dia>ult)return;const s=pre+pad(d.dia);p.shifts[s]=k;if(loc)p.sloc[s]=loc;else delete p.sloc[s];n++});
+    UI.month=pre+'01';UI.foto=null;save();closeModal();toast(`📷 ${n} plantões salvos em ${MES[j.mes-1]}.`)},
+  planoTipo:v=>{UI.casal=!!v;const el=document.getElementById('planos');if(el&&CLOUD.planos)el.innerHTML=planosHtml(CLOUD.planos)},
+  parSalvar:async()=>{const e=val('par-e').trim();toast('Salvando…');
+    try{const j=await rpc('ritmo_convidar',{p_email:e});if(!j.ok){toast('⚠️ '+j.erro);return}await loadSub();toast(e?'👥 Liberado para '+j.parceiro:'Convite removido.');render()}catch(x){toast('⚠️ Não foi possível salvar agora.')}},
   ploc:v=>{UI.ploc=v||'';render()},
   editLocal:v=>localModal(v||null),
   saveLocal:v=>{const p=P(),n=val('lo-n').trim();if(!n){alert('Dê um nome ao local.');return}
@@ -1270,7 +1446,8 @@ const A={
   },
   briefToggle:()=>{UI.brief=!UI.brief;render()},
   briefWa:()=>{window.open('https://wa.me/?text='+encodeURIComponent(briefing(P(),todayS())),'_blank')},
-  notifOn:()=>{try{Notification.requestPermission().then(()=>render())}catch(e){}},
+  notifOn:()=>pushAtivar(),
+  pushOff:()=>pushDesativar(),
   goSub:v=>{UI.tab='planos';UI.sub=v;render();window.scrollTo(0,0)},
   remToggle:v=>{const r=P().reminders.find(x=>x.id===v);if(!r)return;
     if(r.rep&&!r.done){r.date=proxima(r);r.notified=false;toast('✓ Feito. Próximo: '+dmy(r.date)+' '+hm(r.time))}else{r.done=!r.done;r.notified=true}save();render()},
@@ -1390,6 +1567,7 @@ const C={
   note:v=>{const p=P(),s=todayS();(p.notes[s]=p.notes[s]||{}).text=v},
   quickTask:v=>{addTask(v)},
   quickGoal:v=>{addGoal(v)},
+  fotoEscala:(v,el)=>{const f=el.files[0];if(f)lerEscala(f)},
   import:(v,el)=>{const f=el.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.profiles)throw 0;d.profiles.forEach(fixProfile);const m=DB.meta||{};DB={profiles:d.profiles,cur:0,seen:true,meta:m};save();render();alert('Backup restaurado.')}catch(e){alert('Arquivo inválido.')}};r.readAsText(f)}
 };
 app.addEventListener('click',e=>{
@@ -1399,7 +1577,7 @@ app.addEventListener('click',e=>{
 });
 app.addEventListener('change',e=>{
   const el=e.target.closest('[data-c]');if(!el)return;
-  const f=C[el.dataset.c];if(f){f(el.value,el);save();if(el.dataset.c!=='import')render()}
+  const f=C[el.dataset.c];if(f){f(el.value,el);if(el.dataset.c==='fotoEscala')return;save();if(el.dataset.c!=='import')render()}
 });
 app.addEventListener('input',e=>{
   if(e.target.id==='cap-t'){const r=parseNL(e.target.value);if(UI.capManual){r.kind=UI.capManual;if(r.kind==='lembrete'&&r.time==null)r.time=540;if(r.kind!=='tarefa'&&!r.date)r.date=todayS()}UI.cap=r;capRefresh()}
@@ -1413,6 +1591,7 @@ app.addEventListener('keydown',e=>{
 function render(){
   if(CLOUD_ON&&!CLOUD.session){app.innerHTML=gateHtml()+(UI.modal?`<div class="mask"><div class="sheet">${UI.modal}</div></div>`:'');return}
   if(CLOUD_ON&&CLOUD.sub&&!subAtivo()){app.innerHTML=paywallHtml()+(UI.modal?`<div class="mask"><div class="sheet">${UI.modal}</div></div>`:'');fillPlanos();return}
+  if(wizAtivo()&&!UI.modal){if(document.querySelector('.wiz')&&UI.wiz)wizRead();app.innerHTML=wizHtml();return}
   const tabs=[['hoje','☀️','Hoje'],['semana','🗓️','Semana'],['mes','📆','Mês'],['planos','🎯','Planos'],['painel','📊','Painel'],['ajustes','⚙️','Ajustes']];
   app.innerHTML=`<header><div class="logo">Rit<b>mo</b></div>
     ${canInstall()?'<button class="btn sm sec hinst" data-a="instalar">📲 Instalar</button>':''}<select data-c="profile" aria-label="Perfil">${DB.profiles.map((x,i)=>`<option value="${i}" ${i===DB.cur?'selected':''}>${MODES[x.mode].i} ${esc(x.name)}</option>`).join('')}</select></header>
