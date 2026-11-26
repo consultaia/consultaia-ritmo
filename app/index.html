@@ -783,7 +783,7 @@ function wizHtml(){
   else if(w.step===1)c=`<h1>${w.mode==='escala'?'Sua escala':w.mode==='fixo'?'Seu horário':'Seu dia'}</h1>
     ${w.mode==='escala'?`<label class="field"><span>Qual o padrão dos seus plantões?</span><select id="w-p">${Object.entries(PATTERNS).filter(([k])=>k!=='custom').map(([k,v])=>`<option value="${k}" ${w.padrao===k?'selected':''}>${v.n}</option>`).join('')}<option value="" ${!w.padrao?'selected':''}>Não tem padrão: vou marcar no calendário</option></select></label>
       <label class="field"><span>Quando é o seu próximo plantão?</span><input id="w-i" type="date" value="${w.inicio}"></label>
-      <div class="mut">Depois você ajusta dia a dia, importa por foto ou cria turnos com os nomes do seu serviço.</div>`:''}
+      <div class="mut">Depois você ajusta dia a dia e cria turnos com os nomes do seu serviço.</div>`:''}
     ${w.mode==='fixo'?`<div class="field"><span>Dias de trabalho ou aula</span><div class="wd">${[1,2,3,4,5,6,0].map(i=>`<label><input type="checkbox" class="w-d" value="${i}" ${w.wd.includes(i)?'checked':''}>${DOW[i]}</label>`).join('')}</div></div>
       <div class="grid2"><label class="field"><span>Começa</span><input id="w-ws" type="time" value="${hm(w.ws)}"></label><label class="field"><span>Termina</span><input id="w-we" type="time" value="${hm(w.we)}"></label></div>`:''}
     <div class="grid2"><label class="field"><span>Costuma acordar</span><input id="w-wk" type="time" value="${hm(w.wake)}"></label><label class="field"><span>Costuma dormir</span><input id="w-sl" type="time" value="${hm(w.sleep)}"></label></div>`;
@@ -816,50 +816,6 @@ function wizFinish(){
   UI.week=ds(mon);UI.wiz=false;UI.tab='semana';
   UI.msg=`<div class="okmsg"><b>Sua semana está montada, ${esc(p.name)}!</b> Toque num bloco para ajustar. Use o ＋ para anotar tarefas, lembretes e gastos falando ou escrevendo.</div>`;
   save();render();window.scrollTo(0,0);
-}
-/* ===================== Escala por foto ===================== */
-function fotoModal(){
-  const p=P();
-  openModal(`<h3>📷 Importar escala por foto</h3><p class="mut">Tire uma foto reta e nítida da escala do mês (ou escolha uma imagem ou print). A IA lê os seus plantões e você confere antes de salvar.</p>
-    <label class="field"><span>Seu nome como aparece na escala</span><input id="fo-n" value="${esc(p.nomeEscala||'')}" placeholder="Ex.: JANAN ou Dr. Almeida (deixe vazio se a escala é só sua)"></label>
-    <label class="btn full" style="cursor:pointer">📷 Tirar foto ou escolher imagem<input type="file" accept="image/*" data-c="fotoEscala" hidden></label>
-    <div id="fo-msg" class="mut" style="margin-top:8px">Mês de referência: ${MES[parse(UI.month).getMonth()]} de ${parse(UI.month).getFullYear()}.</div>
-    <div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn ghost" data-a="close">Cancelar</button></div>`);
-}
-function reduzirImagem(file,max){return new Promise((ok,err)=>{const img=new Image(),u=URL.createObjectURL(file);
-  img.onload=()=>{const k=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
-    c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);ok(c.toDataURL('image/jpeg',.82).split(',')[1])};
-  img.onerror=()=>{URL.revokeObjectURL(u);err(new Error('imagem'))};img.src=u})}
-async function lerEscala(file){
-  const p=P(),msg=document.getElementById('fo-msg'),nome=(document.getElementById('fo-n')||{}).value||'';
-  p.nomeEscala=nome.trim();
-  try{
-    if(msg)msg.textContent='Preparando a imagem…';
-    const b64=await reduzirImagem(file,1800),m=parse(UI.month);
-    if(msg)msg.textContent='Lendo a escala… pode levar alguns segundos.';
-    const t=await token(),r=await fetch(SUPABASE_URL+'/functions/v1/ritmo-escala',{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+t,'Content-Type':'application/json'},
-      body:JSON.stringify({imagem:b64,mime:'image/jpeg',nome:p.nomeEscala,siglas:Object.entries(p.shiftTypes).map(([k,x])=>x.sig||k),mes:m.getMonth()+1,ano:m.getFullYear()})});
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok||!j.ok){if(msg)msg.innerHTML=`<span style="color:var(--bad)">${esc(j.erro||'Não foi possível ler a imagem.')}</span>`;return}
-    if(!j.achou||!j.dias.length){if(msg)msg.innerHTML=`<span style="color:var(--bad)">Não encontrei plantões${p.nomeEscala?' para “'+esc(p.nomeEscala)+'”':''} nessa foto. Confira o nome e tente uma foto mais nítida.</span>`;return}
-    UI.foto=j;fotoRevisao();
-  }catch(e){if(msg)msg.innerHTML='<span style="color:var(--bad)">Não foi possível enviar a imagem. Confira a internet e tente de novo.</span>'}
-}
-function siglaPara(p,sig){const S=String(sig).toUpperCase(),tipos=Object.entries(p.shiftTypes);
-  let k=(tipos.find(([k,t])=>String(t.sig||k).toUpperCase()===S)||[])[0];if(k)return k;
-  const ali={D:'SD',DIA:'SD',N:'SN',NOITE:'SN',MAN:'M',TAR:'T',P:'SD',24:'P24',P24:'P24',PL:'SD',12:'SD'}[S];
-  return ali&&p.shiftTypes[ali]?ali:'';
-}
-function fotoRevisao(){
-  const p=P(),j=UI.foto,sigs=[...new Set(j.dias.map(d=>d.sigla))];
-  openModal(`<h3>Confira a escala lida</h3><div class="okmsg">Encontrei <b>${j.dias.length} plantões</b> em <b>${MES[j.mes-1]||''} de ${j.ano}</b>${j.nome_lido?' para <b>'+esc(j.nome_lido)+'</b>':''}.</div>
-    <div class="field"><span>Cada sigla da foto corresponde a qual turno seu?</span>${sigs.map(sg=>{const k=siglaPara(p,sg);return`<div class="row" style="margin:6px 0"><span class="chip wk" style="min-width:52px;justify-content:center">${esc(sg)}</span><span class="mut">→</span>
-      <select class="inl sp fo-map" data-s="${esc(sg)}"><option value="">Ignorar</option>${Object.entries(p.shiftTypes).map(([kk,t])=>`<option value="${kk}" ${k===kk?'selected':''}>${esc(t.sig||kk)} · ${esc(t.n||'')}</option>`).join('')}</select></div>`}).join('')}</div>
-    ${p.locais.length?`<label class="field"><span>Local desses plantões</span><select id="fo-l"><option value="">Sem local</option>${p.locais.map(l=>`<option value="${l.id}" ${UI.ploc===l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}</select></label>`:''}
-    <div class="mut">Dias: ${j.dias.map(d=>`${d.dia} (${esc(d.sigla)})`).join(', ')}</div>
-    <label class="toggle"><input id="fo-z" type="checkbox" checked> Substituir a escala que já está nesse mês</label>
-    <div class="mut">A leitura pode errar: confira os dias no calendário depois de salvar.</div>
-    <div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn ghost" data-a="close">Cancelar</button><button class="btn" data-a="fotoAplicar">Salvar na escala</button></div>`);
 }
 /* ===================== Estatísticas ===================== */
 function dayStats(p,s){
@@ -1037,7 +993,7 @@ mes(){
   let h=`<div class="row" style="margin-top:12px"><button class="btn ghost" data-a="mo" data-v="-1">‹</button>
     <h2 class="sp" style="text-align:center;margin:0">${MES[mo]} ${y}</h2><button class="btn ghost" data-a="mo" data-v="1">›</button></div>`;
   if(esca){
-    h+=`<div class="card"><div class="row"><h3 class="sp" style="margin:0">Pintar escala</h3>${CLOUD_ON?'<button class="btn sm sec" data-a="foto">📷 Por foto</button>':''}<button class="btn sm sec" data-a="pattern">Gerar padrão</button></div>
+    h+=`<div class="card"><div class="row"><h3 class="sp" style="margin:0">Pintar escala</h3><button class="btn sm sec" data-a="pattern">Gerar padrão</button></div>
     <div class="mut" style="margin:4px 0">Escolha o tipo e toque nos dias.</div><div class="paint">`;
     Object.entries(p.shiftTypes).forEach(([k,t])=>h+=`<button class="${UI.paint===k?'on':''}" style="background:${t.c}" data-a="paint" data-v="${k}" title="${esc(t.n||'')}">${esc(t.sig||k)}</button>`);
     h+=`<button class="${UI.paint==='-'?'on':''}" style="background:#10b981" data-a="paint" data-v="-">Folga</button></div>
@@ -1165,8 +1121,7 @@ gestor(){
     ${k(m.vendas,'vendas aprovadas')}${k(m.pendentes,'pagamentos pendentes')}${k(m.estornos,'estornos')}${k(m.push,'com avisos ligados')}</div>`;
   const mx=Math.max(1,...m.por_dia.map(d=>d.n));
   h+=`<div class="card"><h3>Cadastros por dia (14 dias)</h3><div class="bars">${m.por_dia.map(d=>`<div title="${d.dia}: ${d.n}"><i style="height:${Math.max(3,d.n/mx*70)}px;${d.n?'':'background:var(--line)'}"></i><b>${d.n||''}</b><span>${+d.dia.slice(8)}</span></div>`).join('')}</div></div>`;
-  h+=`<div class="card"><h3>Vendas por plano</h3>${m.por_plano.length?m.por_plano.map(x=>`<div class="row" style="margin:8px 0"><span class="sp">${esc(x.plano)}</span><span class="mut">${x.n} venda${x.n>1?'s':''}</span><b>${brl(x.valor)}</b></div>`).join(''):'<div class="mut">Nenhuma venda ainda.</div>'}
-    <div class="mut" style="margin-top:6px">Leituras de escala por foto em 7 dias: ${m.fotos7}</div></div>`;
+  h+=`<div class="card"><h3>Vendas por plano</h3>${m.por_plano.length?m.por_plano.map(x=>`<div class="row" style="margin:8px 0"><span class="sp">${esc(x.plano)}</span><span class="mut">${x.n} venda${x.n>1?'s':''}</span><b>${brl(x.valor)}</b></div>`).join(''):'<div class="mut">Nenhuma venda ainda.</div>'}</div>`;
   const cor={pago:'#047857',teste:'#b45309',vencido:'#64748b',convidado:'#4f46e5'};
   h+=`<div class="card"><h3>Últimas contas</h3>${m.recentes.map(x=>`<div class="item" style="cursor:default"><div class="tt"><div>${esc(x.email)}</div><div class="mut">entrou ${dmy(x.criado_em.slice(0,10))} · até ${dmy(x.fim.slice(0,10))}${x.plano?' · '+esc(x.plano):''}</div></div><b style="color:${cor[x.fase]||'inherit'};font-size:13px">${esc(x.fase)}</b></div>`).join('')||'<div class="mut">Nenhuma conta ainda.</div>'}</div>`;
   h+=`<div class="card"><h3>Últimos pagamentos</h3>${m.pagamentos.map(x=>`<div class="item" style="cursor:default"><div class="tt"><div>${esc(x.email)}</div><div class="mut">${dmy(x.criado_em.slice(0,10))} · ${esc(x.plano)}${x.metodo?' · '+esc(x.metodo):''} · ${esc(x.status)}</div></div><b>${brl(x.valor)}</b></div>`).join('')||'<div class="mut">Nenhum pagamento ainda.</div>'}</div>`;
@@ -1425,12 +1380,6 @@ const A={
   wizNext:()=>{wizRead();if(UI.wiz.step<2){UI.wiz.step++;render();window.scrollTo(0,0)}else wizFinish()},
   wizBack:()=>{wizRead();UI.wiz.step--;render()},
   wizSkip:()=>{UI.wiz=false;DB.seen=false;render()},
-  foto:()=>{if(!CLOUD_ON||!CLOUD.session){toast('Entre na sua conta para importar por foto.');return}fotoModal()},
-  fotoAplicar:()=>{const p=P(),j=UI.foto,map={};document.querySelectorAll('.fo-map').forEach(x=>map[x.dataset.s]=x.value);
-    const loc=(document.getElementById('fo-l')||{}).value||'',pre=j.ano+'-'+pad(j.mes)+'-',ult=new Date(j.ano,j.mes,0).getDate();
-    if(document.getElementById('fo-z').checked)Object.keys(p.shifts).forEach(d=>{if(d.startsWith(pre)){delete p.shifts[d];delete p.sloc[d];delete p.sval[d];delete p.spago[d]}});
-    let n=0;j.dias.forEach(d=>{const k=map[d.sigla];if(!k||d.dia>ult)return;const s=pre+pad(d.dia);p.shifts[s]=k;if(loc)p.sloc[s]=loc;else delete p.sloc[s];n++});
-    UI.month=pre+'01';UI.foto=null;save();closeModal();toast(`📷 ${n} plantões salvos em ${MES[j.mes-1]}.`)},
   planoTipo:v=>{UI.casal=!!v;const el=document.getElementById('planos');if(el&&CLOUD.planos)el.innerHTML=planosHtml(CLOUD.planos)},
   parSalvar:async()=>{const e=val('par-e').trim();toast('Salvando…');
     try{const j=await rpc('ritmo_convidar',{p_email:e});if(!j.ok){toast('⚠️ '+j.erro);return}await loadSub();toast(e?'👥 Liberado para '+j.parceiro:'Convite removido.');render()}catch(x){toast('⚠️ Não foi possível salvar agora.')}},
@@ -1643,7 +1592,6 @@ const C={
   note:v=>{const p=P(),s=todayS();(p.notes[s]=p.notes[s]||{}).text=v},
   quickTask:v=>{addTask(v)},
   quickGoal:v=>{addGoal(v)},
-  fotoEscala:(v,el)=>{const f=el.files[0];if(f)lerEscala(f)},
   import:(v,el)=>{const f=el.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.profiles)throw 0;d.profiles.forEach(fixProfile);const m=DB.meta||{};DB={profiles:d.profiles,cur:0,seen:true,meta:m};save();render();alert('Backup restaurado.')}catch(e){alert('Arquivo inválido.')}};r.readAsText(f)}
 };
 app.addEventListener('click',e=>{
@@ -1653,7 +1601,7 @@ app.addEventListener('click',e=>{
 });
 app.addEventListener('change',e=>{
   const el=e.target.closest('[data-c]');if(!el)return;
-  const f=C[el.dataset.c];if(f){f(el.value,el);if(el.dataset.c==='fotoEscala')return;save();if(el.dataset.c!=='import')render()}
+  const f=C[el.dataset.c];if(f){f(el.value,el);save();if(el.dataset.c!=='import')render()}
 });
 app.addEventListener('input',e=>{
   if(e.target.id==='cap-t'){const r=parseNL(e.target.value);if(UI.capManual){r.kind=UI.capManual;if(r.kind==='lembrete'&&r.time==null)r.time=540;if(r.kind!=='tarefa'&&!r.date)r.date=todayS()}UI.cap=r;capRefresh()}
