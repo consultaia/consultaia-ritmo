@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Como usar o Ritmo — guia rápido</title>
+<meta name="description" content="Guia rápido do Ritmo: criar conta, marcar a escala, distribuir a semana, lembretes, ganhos por plantão e planos.">
+<meta property="og:title" content="Como usar o Ritmo — guia rápido">
+<meta property="og:description" content="Em 5 minutos: escala, semana distribuída, lembretes e ganhos por plantão.">
+<meta property="og:image" content="assets/hoje.jpg">
+<link rel="icon" href="app/icon-192.png">
+<style>
+:root{--ink:#1f2340;--mut:#5d6283;--line:#e7e6f2;--bg:#f6f5fb;--pri:#4f46e5;--pri2:#eef0ff}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+a{color:var(--pri)}main{max-width:820px;margin:0 auto;padding:22px 18px 70px}
+.top{display:flex;align-items:center;gap:12px}.logo{font-weight:800;font-size:24px;text-decoration:none;color:var(--ink)}.logo b{color:var(--pri)}
+.btn{display:inline-block;background:var(--pri);color:#fff;text-decoration:none;font-weight:700;border-radius:12px;padding:11px 18px}.top .btn{margin-left:auto;padding:9px 14px;font-size:14px}
+h1{font-size:clamp(28px,6vw,40px);line-height:1.1;letter-spacing:-1px;margin:26px 0 8px}.lead{color:var(--mut);font-size:18px;margin:0 0 18px}
+.idx{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 6px}.idx a{background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:14px;text-decoration:none;font-weight:600}
+section{background:#fff;border-radius:18px;padding:20px 22px;margin-top:16px}
+h2{font-size:22px;letter-spacing:-.3px;margin:0 0 6px;display:flex;gap:10px;align-items:center}
+h2 span{display:inline-grid;place-items:center;min-width:32px;height:32px;border-radius:10px;background:var(--pri);color:#fff;font-size:15px}
+ol,ul{padding-left:20px;margin:8px 0}li{margin:6px 0}
+.ex{display:inline-block;background:var(--pri2);color:var(--pri);border-radius:9px;padding:3px 9px;font-weight:600;font-size:14px;margin:3px 4px 3px 0}
+.tip{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:10px 12px;font-size:15px;margin:10px 0}
+.two{display:grid;gap:18px;align-items:start}@media(min-width:680px){.two{grid-template-columns:1fr 230px}}
+.shot{width:100%;max-width:230px;border-radius:18px;border:6px solid #11142b;display:block;margin:0 auto;background:#f6f5fb}
+table{width:100%;border-collapse:collapse;font-size:15px;margin-top:8px}td,th{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line)}th{color:var(--mut);font-size:13px}
+.mut{color:var(--mut);font-size:14px}.end{text-align:center;margin-top:26px}
+@media print{body{background:#fff}.top .btn,.idx{display:none}section{break-inside:avoid;border:1px solid var(--line)}}
+</style>
+</head>
+<body><main>
+<div class="top"><a class="logo" href="./">Rit<b>mo</b></a><a class="btn" href="app/?criar">Abrir o Ritmo</a></div>
+<h1>Como usar o Ritmo</h1>
+<p class="lead">Guia rápido. Em 5 minutos sua escala está marcada e a semana, organizada.</p>
+<div class="idx"><a href="#comecar">Começar</a><a href="#escala">Escala</a><a href="#semana">Semana</a><a href="#anotar">Anotar falando</a><a href="#lembretes">Lembretes</a><a href="#ganhos">Ganhos</a><a href="#dia">Dia a dia</a><a href="#planos">Planos</a><a href="#duvidas">Dúvidas</a></div>
+
+<section id="comecar"><h2><span>1</span> Criar a conta e instalar</h2>
+<div class="two"><div>
+<ol>
+<li>Abra <a href="https://consultaia.github.io/consultaia-ritmo/">consultaia.github.io/consultaia-ritmo</a> e toque em <b>Começar 7 dias grátis</b>. Só precisa de e-mail e senha, sem cartão.</li>
+<li>Responda as 3 perguntas das boas-vindas: seu nome e tipo de rotina, sua escala (ou horário) e o que quer encaixar na semana. No fim, a semana já aparece montada.</li>
+<li><b>Instale no celular:</b> toque em <b>📲 Instalar</b> no topo. No iPhone: Safari → Compartilhar → <b>Adicionar à Tela de Início</b>. O Ritmo vira um ícone e abre como app.</li>
+</ol>
+<div class="tip">Já usa o <b>Preceptor</b>? É a mesma conta: entre com o mesmo e-mail e a mesma senha.</div>
+<p class="mut">Funciona no celular e no computador com a mesma conta. O que você lança num aparece no outro.</p>
+</div><img class="shot" src="assets/boasvindas.jpg" alt="Tela de boas-vindas do Ritmo" loading="lazy"></div></section>
+
+<section id="escala"><h2><span>2</span> Marcar a escala</h2>
+<div class="two"><div>
+<p>Na aba <b>Mês</b> há três jeitos:</p>
+<ul>
+<li><b>Tocar nos dias:</b> escolha o turno (SD, SN, M, T, 24h) e toque nos dias do calendário. Tocar de novo apaga.</li>
+<li><b>Gerar padrão:</b> para 12x36, 24x72 e outros ciclos. Informe o primeiro dia e o Ritmo preenche até 6 meses.</li>
+<li><b>📷 Por foto:</b> fotografe a escala do mês, diga seu nome como aparece nela, confira as siglas lidas e salve.</li>
+</ul>
+<p><b>Seus turnos têm outro nome?</b> Em <b>Ajustes → Turnos e plantões</b> você muda sigla, nome, horário e cor, ou cria turnos novos (ex.: “MT – Manhã e tarde”).</p>
+<p class="mut">Não trabalha de escala? Em Ajustes → Perfil escolha <b>Horário fixo</b> ou <b>Rotina flexível</b>.</p>
+</div><img class="shot" src="assets/foto.jpg" alt="Conferência da escala lida por foto" loading="lazy"></div></section>
+
+<section id="semana"><h2><span>3</span> Distribuir a semana</h2>
+<div class="two"><div>
+<ol>
+<li>Em <b>Ajustes → Atividades recorrentes</b>, diga o que quer fazer toda semana: academia 3x, faxina 1x, mercado… com duração, período preferido e se é “só em dia de folga”.</li>
+<li>Em <b>Planos → Tarefas</b>, jogue as tarefas soltas (com prazo e prioridade, se quiser).</li>
+<li>Na aba <b>Semana</b>, toque em <b>⚡ Distribuir semana</b>.</li>
+</ol>
+<p>O Ritmo encaixa tudo no seu tempo livre, respeitando o plantão, o deslocamento, o sono e o <b>descanso depois do noturno</b>. Mudou o plantão? Toque em Distribuir de novo.</p>
+<ul><li>Toque num bloco para mudar o horário ou o dia. O que você ajusta à mão não é mexido depois.</li><li><b>▦ Grade</b> mostra a semana no estilo calendário. <b>📅 .ics</b> leva a semana para o Google Agenda.</li></ul>
+</div><img class="shot" src="assets/grade.jpg" alt="Grade semanal com plantões e atividades" loading="lazy"></div></section>
+
+<section id="anotar"><h2><span>4</span> Anotar falando ou escrevendo</h2>
+<div class="two"><div>
+<p>Toque no botão <b>＋</b> e fale (🎙️) ou escreva do seu jeito. O Ritmo entende o que é e já preenche data e hora:</p>
+<table><tr><th>Você diz</th><th>Vira</th></tr>
+<tr><td><span class="ex">consulta sexta às 14h30</span></td><td>Compromisso na agenda</td></tr>
+<tr><td><span class="ex">me lembra de pagar a luz amanhã 10h</span></td><td>Lembrete</td></tr>
+<tr><td><span class="ex">tomar remédio todo dia às 8h</span></td><td>Lembrete que repete</td></tr>
+<tr><td><span class="ex">reunião segunda 9h, avisar 30 minutos antes</span></td><td>Compromisso com aviso antecipado</td></tr>
+<tr><td><span class="ex">gastei 45,90 no mercado</span></td><td>Gasto</td></tr>
+<tr><td><span class="ex">comprar presente da Bia</span></td><td>Tarefa na fila</td></tr></table>
+<p class="mut">Antes de salvar você confere e corrige o tipo, a data, a hora e a categoria.</p>
+</div><img class="shot" src="assets/captura.jpg" alt="Tela de anotar por voz ou texto" loading="lazy"></div></section>
+
+<section id="lembretes"><h2><span>5</span> Lembretes e avisos</h2>
+<ul>
+<li><b>Ative os avisos uma vez:</b> em <b>Ajustes → Avisos → Ativar avisos</b> (ou no cartão “Resumo do dia”). A partir daí a notificação chega <b>mesmo com o app fechado</b>.</li>
+<li><b>Quanto tempo antes:</b> ao criar, escolha em <b>Avisar</b>: na hora, 5, 10, 15 ou 30 min, 1 h, 2 h ou 1 dia antes. Compromissos já vêm com 30 min antes.</li>
+<li><b>Repetir:</b> todo dia, toda semana ou todo mês. Ao marcar como feito, ele passa para a próxima data.</li>
+<li><b>Editar:</b> toque no lembrete em <b>Planos → Lembretes</b> para mudar título, hora, antecedência ou repetição.</li>
+</ul>
+<div class="tip"><b>iPhone:</b> as notificações só funcionam com o Ritmo instalado na Tela de Início (passo 1). <b>Android e computador:</b> funcionam direto pelo navegador.</div>
+<p class="mut">O aviso pode chegar com até 1 minuto de diferença. Para coisas críticas, como horário de medicação, não dependa só da notificação.</p>
+</section>
+
+<section id="ganhos"><h2><span>6</span> Ganhos por plantão</h2>
+<div class="two"><div>
+<ol>
+<li>Em <b>Ajustes → Locais de trabalho e valores</b>, cadastre cada hospital e quanto ele paga por turno (SD, SN, 24h…).</li>
+<li>No <b>Mês</b>, antes de tocar nos dias, escolha <b>Onde?</b>. O plantão entra já com o valor daquele local.</li>
+<li>Em <b>Produção do mês</b> você vê o total previsto, o que já recebeu e o que falta, separado por local.</li>
+</ol>
+<ul><li>Toque num plantão da lista para trocar o local ou colocar um valor diferente (extra, feriado).</li><li>Marque <b>✓</b> quando o pagamento cair.</li></ul>
+</div><img class="shot" src="assets/ganhos.jpg" alt="Produção do mês por local" loading="lazy"></div></section>
+
+<section id="dia"><h2><span>7</span> No dia a dia</h2>
+<div class="two"><div>
+<ul>
+<li><b>Hoje:</b> resumo do dia, as 3 prioridades, hábitos (com sequência 🔥), agenda e “como foi seu dia”. O botão <b>📲 Mandar no WhatsApp</b> envia o resumo para quem você quiser.</li>
+<li><b>Planos:</b> tarefas, lembretes, hábitos, metas do mês e gastos.</li>
+<li><b>Gastos:</b> lance pelo ＋ (“gastei 30 no uber”). Veja o total do mês, por categoria e a comparação com o mês anterior.</li>
+<li><b>Painel:</b> quanto da semana foi plantão, quanto foi para você e quanto sobrou livre, além dos hábitos e do humor.</li>
+</ul>
+</div><img class="shot" src="assets/hoje.jpg" alt="Tela Hoje do Ritmo" loading="lazy"></div></section>
+
+<section id="planos"><h2><span>8</span> Planos e pagamento</h2>
+<ul>
+<li><b>7 dias grátis</b> para testar tudo, sem cartão.</li>
+<li>Depois: <b>Mensal R$ 9,90</b>, <b>6 meses R$ 49,90</b> ou <b>Anual R$ 89,90</b>.</li>
+<li><b>Plano Casal</b> (2 contas, cada uma com a própria agenda): <b>R$ 14,90/mês</b> ou <b>R$ 129,90/ano</b>. Quem paga informa o e-mail da outra pessoa em Ajustes → Conta.</li>
+<li>Pagamento por <b>Pix ou cartão</b> pelo Mercado Pago. <b>Não renova sozinho:</b> acabou o período, você decide se continua.</li>
+<li>Para assinar: <b>Ajustes → Conta → Assinar</b>. A liberação é na hora.</li>
+</ul>
+<p class="mut">Se o plano vencer, seus dados continuam guardados. Você pode desistir em até 7 dias após o pagamento e receber o valor de volta.</p>
+</section>
+
+<section id="duvidas"><h2><span>?</span> Dúvidas rápidas</h2>
+<ul>
+<li><b>Esqueci a senha.</b> Na tela de entrar, toque em “Esqueci a senha” e siga o link do e-mail.</li>
+<li><b>Funciona sem internet?</b> Sim, depois de instalado. Sincroniza quando a internet voltar.</li>
+<li><b>Uso no celular e no computador.</b> Entre com a mesma conta nos dois. As alterações se juntam sozinhas.</li>
+<li><b>Quem vê meus dados?</b> Só você. Veja a <a href="privacidade.html">Política de Privacidade</a>.</li>
+<li><b>Quero guardar uma cópia.</b> Ajustes → Backup → Exportar backup.</li>
+<li><b>Não recebi a notificação.</b> Confira se “Avisos ligados neste aparelho” aparece em Ajustes → Avisos e se as notificações do navegador estão permitidas. No iPhone, instale o app primeiro.</li>
+</ul>
+</section>
+
+<div class="end"><a class="btn" href="app/?criar">Começar 7 dias grátis</a><p class="mut" style="margin-top:14px"><a href="./">Site do Ritmo</a> · <a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Privacidade</a></p></div>
+</main></body></html>
