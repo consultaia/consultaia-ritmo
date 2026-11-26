@@ -273,12 +273,15 @@ async function cloudPull(){
   if(!CLOUD_ON||!CLOUD.session)return;
   CLOUD.status='sync';
   await loadSub();
+  /* aparelho compartilhado: dados locais de outra conta nunca entram nesta */
+  if(DB.meta&&DB.meta.uid&&DB.meta.uid!==CLOUD.session.uid){DB={profiles:[newProfile('Eu','escala')],cur:0,seen:false,meta:{uid:CLOUD.session.uid}};persist()}
+  DB.meta=DB.meta||{};DB.meta.uid=CLOUD.session.uid;
   try{
     const rows=await rest('GET','?select=dados,atualizado_em&user_id=eq.'+CLOUD.session.uid);
     const remote=rows&&rows[0];
     const synced=DB.meta&&DB.meta.syncedAt,changedLocal=localStamp()&&(!synced||localStamp()>synced);
     if(remote&&remote.dados&&remote.dados.profiles&&(!changedLocal||remote.atualizado_em>localStamp())){
-      const d=remote.dados;d.profiles.forEach(fixProfile);d.meta=Object.assign({},d.meta,{syncedAt:remote.atualizado_em,updatedAt:remote.atualizado_em});
+      const d=remote.dados;d.profiles.forEach(fixProfile);d.meta=Object.assign({},d.meta,{syncedAt:remote.atualizado_em,updatedAt:remote.atualizado_em,uid:CLOUD.session.uid});
       DB=d;if(DB.cur>=DB.profiles.length)DB.cur=0;persist();CLOUD.status='ok';CLOUD.last=new Date();if(!UI.modal)render();
     }else if(subAtivo())await cloudPush(true);else{CLOUD.status='ok';CLOUD.last=new Date()}
   }catch(e){CLOUD.status='erro';CLOUD.err=e.message;if(!UI.modal)render()}
