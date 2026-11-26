@@ -110,6 +110,39 @@ nav button span{display:block;font-size:20px;line-height:1.2}nav button.on{color
 .plan big{font-size:24px;font-weight:800}.plan small{color:var(--mut)}.plan.best{border-color:var(--pri);background:var(--pri2)}
 .plan .tag{position:absolute;right:12px;top:-10px;background:var(--pri);color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
 .subbar{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:8px 10px 8px 12px;font-size:13px;font-weight:600;margin:4px 0}
+.navlogo{display:none}
+.inst{border:2px solid var(--pri2)}.ios{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:0 6px}
+header .hinst{margin-left:auto}header .hinst+select{margin-left:0}
+@media(min-width:1024px){
+  body{padding-left:232px}
+  #app{max-width:1180px;padding:0 28px 40px}
+  nav{top:0;bottom:0;right:auto;width:232px;border-top:0;border-right:1px solid var(--line);flex-direction:column;justify-content:flex-start;padding:22px 14px}
+  nav .in{flex-direction:column;gap:4px;max-width:none}
+  .navlogo{display:block;font-weight:800;font-size:26px;letter-spacing:-.6px;padding:0 12px 22px}.navlogo b{color:var(--pri)}
+  nav button{display:flex;align-items:center;gap:12px;flex:none;text-align:left;font-size:15px;font-weight:600;padding:11px 12px;border-radius:12px}
+  nav button span{display:inline;font-size:19px}
+  nav button.on{background:var(--pri2)}
+  nav button:hover{background:#f3f2fb}
+  header{padding:22px 0 10px}header .logo{display:none}
+  header select{max-width:220px}
+  .fab{right:32px;bottom:32px}
+  #toast{bottom:110px}
+  .v-hoje,.v-planos,.v-painel,.v-ajustes{column-count:2;column-gap:20px}
+  .v-semana{column-count:3;column-gap:16px}
+  main[class^=v-]>*{break-inside:avoid}
+  main[class^=v-]>.card{display:block;margin-top:0;margin-bottom:16px}
+  main[class^=v-]>.card.row{display:flex}
+  main[class^=v-]>h2{break-after:avoid;margin-top:6px}
+  .v-hoje>h2,.v-semana>:not(.card),.v-planos>:not(.card),.v-painel>.kpis,.v-painel>.row,.v-planos>h2{column-span:all}
+  .v-painel>.kpis{margin-bottom:16px}
+  .v-mes .cal .d{min-height:104px;font-size:13px;padding:8px}
+  .v-mes .cal .d .chip{font-size:11px;padding:2px 7px}
+  .v-semana .gridwrap{column-span:all;margin:8px 0}
+  .wgrid{min-width:0}
+  .kpi b{font-size:26px}
+  .hgrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+}
+@media(min-width:1400px){.v-hoje,.v-planos,.v-ajustes{column-count:3}}
 </style>
 </head>
 <body>
@@ -269,7 +302,7 @@ function cloudBadge(){const s=CLOUD.status;
 const SKEY='ritmo.sub';
 try{CLOUD.sub=JSON.parse(localStorage.getItem(SKEY))}catch(e){}
 function subAtivo(){const x=CLOUD.sub;return!!(x&&x.fim&&new Date(x.fim)>new Date())}
-function subDias(){const x=CLOUD.sub;return x&&x.fim?Math.ceil((new Date(x.fim)-new Date())/86400000):0}
+function subDias(){const x=CLOUD.sub;return x&&x.fim?Math.max(0,Math.ceil((new Date(x.fim)-new Date())/86400000-0.02)):0}
 async function rpc(fn,body){
   const t=await token();if(!t)throw new Error('sem sessão');
   const r=await fetch(SUPABASE_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+t,'Content-Type':'application/json','Content-Profile':'ritmo','Accept-Profile':'ritmo'},body:JSON.stringify(body||{})});
@@ -523,7 +556,8 @@ function toast(msg){let el=document.getElementById('toast');if(!el){el=document.
 function briefing(p,s){
   const d=parse(s),st=dayStats(p,s),rs=p.reminders.filter(r=>r.date===s&&!r.done).sort((a,b)=>a.time-b.time);
   const tasks=p.tasks.filter(t=>!t.done&&t.due&&t.due<=s);
-  const L=[`Bom dia, ${p.name}! ${DOW[d.getDay()]}, ${d.getDate()}/${pad(d.getMonth()+1)}.`];
+  const nome=(p.name&&p.name!=='Eu')?p.name:((CLOUD.session&&CLOUD.session.email||'').split('@')[0].split(/[._-]/)[0]||'');
+  const L=[`Bom dia${nome?', '+nome.charAt(0).toUpperCase()+nome.slice(1):''}! ${DOW[d.getDay()]}, ${d.getDate()}/${pad(d.getMonth()+1)}.`];
   if(st.c.shift)L.push(`🏥 Plantão ${st.c.shift.k} ${hm(st.c.shift.s)}–${hm(st.c.shift.e)}`);
   else if(st.c.postNight)L.push('😴 Pós-noturno: descanso primeiro.');
   else if(st.c.work)L.push(`💼 Expediente ${hm(p.settings.work.s)}–${hm(p.settings.work.e)}`);
@@ -536,6 +570,36 @@ function briefing(p,s){
 }
 const brl=v=>'R$ '+Number(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
 const ICON='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" rx="22" fill="#4f46e5"/><text x="48" y="64" font-size="50" text-anchor="middle" fill="#fff" font-family="Arial" font-weight="700">R</text></svg>');
+/* ===================== Instalar app ===================== */
+const INST={evt:null};
+const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const isMobile=()=>/android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent)||isIOS();
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();INST.evt=e;if(!UI.modal)render()});
+window.addEventListener('appinstalled',()=>{INST.evt=null;toast('✅ Ritmo instalado! Abra pelo ícone na tela inicial.');render()});
+function canInstall(){return!isStandalone()&&(INST.evt||isIOS()||isMobile())}
+function installCard(force){
+  if(isStandalone())return force?`<div class="card"><h3>📲 App instalado</h3><div class="mut">Você está usando o Ritmo instalado. 👍</div></div>`:'';
+  if(!force){let off=false;try{off=localStorage.getItem('ritmo.noinst')==='1'}catch(e){}if(off||!canInstall())return''}
+  return`<div class="card inst"><div class="row"><span style="font-size:28px">📲</span><div class="sp"><b>Instale o Ritmo ${isMobile()?'no celular':'no computador'}</b>
+    <div class="mut">Abre pelo ícone, em tela cheia, e funciona sem internet.</div></div></div>
+    <div class="row wrap" style="margin-top:10px"><button class="btn sm" data-a="instalar">Instalar app</button>${force?'':'<button class="btn sm ghost" data-a="noInst">Agora não</button>'}</div></div>`;
+}
+function iosHelp(){
+  openModal(`<h3>Instalar no iPhone</h3><ol class="steps">
+    <li>Abra este endereço no <b>Safari</b> (no Chrome do iPhone o menu é parecido: <b>⋯ → Adicionar à Tela de Início</b>).</li>
+    <li>Toque em <b>Compartilhar</b> <span class="ios">⬆︎</span> na barra de baixo.</li>
+    <li>Role e toque em <b>Adicionar à Tela de Início</b> ➕.</li>
+    <li>Toque em <b>Adicionar</b>. O ícone do Ritmo aparece junto dos seus apps.</li></ol>
+    <div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn" data-a="close">Entendi</button></div>`);
+}
+function otherHelp(){
+  openModal(`<h3>Instalar o Ritmo</h3><ol class="steps">
+    <li><b>Android (Chrome):</b> menu <b>⋮</b> → <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</li>
+    <li><b>Computador (Chrome ou Edge):</b> clique no ícone de instalar <b>⊕</b> na barra de endereço, ou menu → <b>Instalar Ritmo</b>.</li>
+    <li><b>iPhone:</b> Safari → <b>Compartilhar ⬆︎</b> → <b>Adicionar à Tela de Início</b>.</li></ol>
+    <div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn" data-a="close">Entendi</button></div>`);
+}
 /* ===================== Estatísticas ===================== */
 function dayStats(p,s){
   const c=dayCtx(p,s);itemsBusy(p,s,c);
@@ -634,6 +698,7 @@ hoje(){
     ${UI.brief?`<pre>${esc(briefing(p,s))}</pre><div class="row wrap"><button class="btn sm" data-a="briefWa">📲 Mandar no WhatsApp</button>
     ${window.Notification&&Notification.permission!=='granted'?`<button class="btn sm sec" data-a="notifOn">🔔 Ativar avisos</button>`:''}</div>`:''}</div>`;
   if(rem.length)h+=`<div class="card"><div class="row"><h3 class="sp">⏰ Lembretes</h3><button class="btn sm ghost" data-a="goSub" data-v="lembretes">todos ›</button></div>${rem.map(r=>remRow(r)).join('')}</div>`;
+  h+=installCard(false);
   h+=`<div class="card row">${ring(pct,'var(--ok)')}<div class="sp"><div>${shiftChip(st.c)}</div>
     <div style="margin-top:6px"><b>${fdur(st.planned)}</b> planejado · <b>${fdur(st.free)}</b> livre</div>
     <div class="mut">${nx?`Próximo: ${hm(nx.s)} · ${esc(nx.t)}`:(st.items.length?'Tudo feito por hoje 🎉':'Nada planejado ainda')}</div></div></div>`;
@@ -823,6 +888,7 @@ ajustes(){
     <div class="mut" style="margin-top:6px">Dê o nome e a sigla que usa no seu serviço (ex.: “MT – Manhã/Tarde”, “P12”, “Sobreaviso”).</div></div>`;}
   h+=`<h2>Perfis neste aparelho</h2><div class="card">${DB.profiles.map((x,i)=>`<div class="item" data-a="editProfile" data-v="${i}"><div class="tt"><div>${i===DB.cur?'● ':''}${esc(x.name)}</div><div class="mut">${MODES[x.mode].i} ${MODES[x.mode].n}</div></div><span class="mut">›</span></div>`).join('')}
     <button class="btn sec full" data-a="addProfile" style="margin-top:8px">+ Novo perfil</button></div>
+  <h2>Aplicativo</h2>${installCard(true)}
   <h2>Backup</h2><div class="card row wrap"><button class="btn sec" data-a="export">Exportar backup</button>
     <label class="btn sec">Importar backup<input type="file" accept=".json" data-c="import" hidden></label></div>
   <p class="mut" style="text-align:center">${CLOUD.session?'Salvo no aparelho e na nuvem.':'Os dados ficam salvos neste aparelho.'}</p>`;
@@ -1000,6 +1066,9 @@ const split=v=>String(v).split('|');
 function addTask(title){const t=String(title||'').trim();if(!t)return false;P().tasks.push({id:uid(),t,cat:'pessoal',prio:'media',dur:30,due:'',period:'any',done:false,created:todayS()});return true}
 function addGoal(title){const t=String(title||'').trim();if(!t)return false;const k=UI.month.slice(0,7),p=P();(p.goals[k]=p.goals[k]||[]).push({id:uid(),t,done:false});return true}
 const A={
+  instalar:async()=>{if(INST.evt){INST.evt.prompt();const r=await INST.evt.userChoice.catch(()=>null);INST.evt=null;if(r&&r.outcome==='accepted')toast('✅ Instalando…');render()}
+    else if(isIOS())iosHelp();else otherHelp()},
+  noInst:()=>{try{localStorage.setItem('ritmo.noinst','1')}catch(e){}render()},
   salvarSenha:async()=>{const a=val('n-p'),b=val('n-p2'),msg=document.getElementById('n-msg');
     if(a.length<6){msg.textContent='Mínimo de 6 caracteres.';return}if(a!==b){msg.textContent='As senhas não conferem.';return}
     msg.textContent='Salvando…';
@@ -1203,9 +1272,9 @@ function render(){
   if(CLOUD_ON&&CLOUD.sub&&!subAtivo()){app.innerHTML=paywallHtml()+(UI.modal?`<div class="mask"><div class="sheet">${UI.modal}</div></div>`:'');fillPlanos();return}
   const tabs=[['hoje','☀️','Hoje'],['semana','🗓️','Semana'],['mes','📆','Mês'],['planos','🎯','Planos'],['painel','📊','Painel'],['ajustes','⚙️','Ajustes']];
   app.innerHTML=`<header><div class="logo">Rit<b>mo</b></div>
-    <select data-c="profile" aria-label="Perfil">${DB.profiles.map((x,i)=>`<option value="${i}" ${i===DB.cur?'selected':''}>${MODES[x.mode].i} ${esc(x.name)}</option>`).join('')}</select></header>
-    ${subBanner()}<main>${VIEWS[UI.tab]()}</main>
-    <nav><div class="in">${tabs.map(([k,i,n])=>`<button class="${UI.tab===k?'on':''}" data-a="tab" data-v="${k}"><span>${i}</span>${n}</button>`).join('')}</div></nav>
+    ${canInstall()?'<button class="btn sm sec hinst" data-a="instalar">📲 Instalar</button>':''}<select data-c="profile" aria-label="Perfil">${DB.profiles.map((x,i)=>`<option value="${i}" ${i===DB.cur?'selected':''}>${MODES[x.mode].i} ${esc(x.name)}</option>`).join('')}</select></header>
+    ${subBanner()}<main class="v-${UI.tab}">${VIEWS[UI.tab]()}</main>
+    <nav><div class="in"><div class="navlogo">Rit<b>mo</b></div>${tabs.map(([k,i,n])=>`<button class="${UI.tab===k?'on':''}" data-a="tab" data-v="${k}"><span>${i}</span>${n}</button>`).join('')}</div></nav>
     ${UI.modal?`<div class="mask"><div class="sheet">${UI.modal}</div></div>`:'<button class="fab" data-a="capture" aria-label="Anotar">＋</button>'}`;
 }
 render();
