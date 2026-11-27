@@ -171,6 +171,7 @@ header .hinst{margin-left:auto}header .hinst+select{margin-left:0}
 .corrow{display:flex;margin:10px 0 4px}.sws{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .swc{width:30px;height:30px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px var(--line);cursor:pointer}.swc.on{box-shadow:0 0 0 3px var(--ink)}
 .swo{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer}.swo.on{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.wk{display:flex;gap:6px;flex-wrap:wrap}.wk{flex-wrap:nowrap}.wk button{flex:1;border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 0;font-size:13px;font-weight:600;cursor:pointer}.wk button.on{background:var(--pri);border-color:var(--pri);color:#fff}
 </style>
 </head>
 <body>
@@ -591,7 +592,14 @@ function parseNL(raw,base){
   if(cut(/\b(todo dia|todos os dias|diariamente)\b/))rep='dia';
   else if(cut(/\btodo mes\b/))rep='mes';
   else if(cut(/\btoda semana\b/))rep='semana';
+  const DN='(domingo|segunda|terca|quarta|quinta|sexta|sabado)s?(?:[- ]feiras?)?';let dias=null;
+  if(!rep&&cut(/\b(?:(?:em|nos|todos os)\s+)?dias? (?:uteis|de semana)\b/)){rep='dias';dias=[1,2,3,4,5]}
+  else if(!rep&&(m=cut(new RegExp('\\b(?:tod[ao]s?\\s+)?(?:de\\s+)?'+DN+'\\s+(?:a|ate)\\s+(?:a\\s+)?'+DN+'\\b')))){
+    rep='dias';dias=[];for(let w=WD[m[1]];;w=(w+1)%7){dias.push(w);if(w===WD[m[2]])break}}
+  else if(!rep&&(m=low.match(new RegExp('\\b(?:tod[ao]s?\\s+(?:[ao]s\\s+)?)?'+DN+'(?:\\s*(?:,|e)\\s*(?:[ao]s?\\s+)?'+DN+')+\\b')))){
+    blank(m.index,m[0].length);rep='dias';dias=[...new Set((m[0].match(/domingo|segunda|terca|quarta|quinta|sexta|sabado/g)||[]).map(x=>WD[x]))]}
   else if(cut(/\btod[ao]s?(?:\s+[ao]s)?\s+(?=domingo|segunda|terca|quarta|quinta|sexta|sabado)/))rep='semana';
+  if(dias)dias.sort((a,b)=>a-b);
   /* data */
   if(cut(/\bdepois de amanha\b/))date=addDays(base,2);
   else if(cut(/\bamanha\b/))date=addDays(base,1);
@@ -631,7 +639,7 @@ function parseNL(raw,base){
   let r;const FILL=/\b(me lembr[ae]|lembr[ae]te|me avis[ae]|lembrar|preciso|tenho que|anota|anotar|gastei|paguei|comprei|gasto|despesa|custou|reais|r\$)\b/g;
   while((r=FILL.exec(low)))blank(r.index,r[0].length);
   let title=[...orig].map((c,i)=>low[i]===' '?' ':c).join('').replace(/\s+/g,' ').trim();
-  for(let k=0;k<3;k++)title=title.replace(/^(de|do|da|que|no|na|em|pra|para|com|e)\s+/i,'').replace(/\s+(de|do|da|no|na|em|pra|para|e|às|as|a|com)$/i,'');
+  for(let k=0;k<3;k++)title=title.replace(/^(de|do|da|que|no|na|em|pra|para|com|e)\s+/i,'').replace(/\s+(de|do|da|no|na|em|pra|para|e|às|as|a|ao|aos|com)$/i,'');
   if(!title)title=kind==='gasto'?'Gasto':'Sem título';
   title=title.charAt(0).toUpperCase()+title.slice(1);
   const L=deacc(title.toLowerCase());
@@ -639,7 +647,8 @@ function parseNL(raw,base){
   if(!date&&(kind==='lembrete'||kind==='compromisso'||kind==='gasto'))date=new Date(base);
   if(kind==='lembrete'&&time==null)time=540;
   if(kind==='lembrete'&&ds(date)===ds(base)&&time<=base.getHours()*60+base.getMinutes())date=addDays(date,1);
-  return{kind,title,date:date?ds(date):'',time,value,cat,rep:kind==='lembrete'?rep:'',antes};
+  if(rep==='dias'&&kind==='lembrete'){let d0=date||new Date(base);if(ds(d0)===ds(base)&&time!=null&&time<=base.getHours()*60+base.getMinutes())d0=addDays(d0,1);date=parse(proxDia({rep,dias,date:ds(d0)},ds(d0)))}
+  return{kind,title,date:date?ds(date):'',time,value,cat,rep:kind==='lembrete'?rep:'',dias:kind==='lembrete'&&rep==='dias'?dias:null,antes};
 }
 /* Lembretes: avisa com o app aberto; com o sw.js instalado, usa notificação do sistema */
 let SWREG=null;
@@ -650,7 +659,14 @@ function notify(title,body,tag){
     else new Notification(title,{body,icon:ICON});}}catch(e){}
   toast(body);try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}
 }
-function repBate(r,d){const o=parse(r.date);return r.rep==='dia'||(r.rep==='semana'&&o.getDay()===d.getDay())||(r.rep==='mes'&&o.getDate()===d.getDate())}
+function repBate(r,d){const o=parse(r.date);return r.rep==='dia'||(r.rep==='dias'&&(r.dias||[]).includes(d.getDay()))||(r.rep==='semana'&&o.getDay()===d.getDay())||(r.rep==='mes'&&o.getDate()===d.getDate())}
+/* primeiro dia (a partir de `de`) em que o lembrete repetido acontece */
+function proxDia(r,de){let d=parse(de);for(let i=0;i<400;i++){if(repBate(r,d))return ds(d);d=addDays(d,1)}return de}
+const WK=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+function repTxt(r){if(r.rep!=='dias')return REPS[r.rep]||'';const d=[...(r.dias||[])].map(x=>(x+6)%7).sort((a,b)=>a-b);if(!d.length)return'Dias da semana';
+  const N=x=>WK[(x+1)%7];if(d.join()==='0,1,2,3,4')return'Dias úteis';if(d.length===7)return'Todo dia';
+  if(d.length>2&&d.every((x,i)=>!i||x===d[i-1]+1))return N(d[0])+' a '+N(d[d.length-1]);return d.map(N).join(', ')}
+const wkChips=(sel,act)=>`<div class="wk">${[1,2,3,4,5,6,0].map(w=>`<button type="button" class="${(sel||[]).includes(w)?'on':''}" data-a="${act}" data-v="${w}">${WK[w]}</button>`).join('')}</div>`;
 const ANTES={0:'Na hora',5:'5 min antes',10:'10 min antes',15:'15 min antes',30:'30 min antes',60:'1 hora antes',120:'2 horas antes',1440:'1 dia antes'};
 const antesTxt=m=>m>=1440?'Amanhã':m>=60?'Em '+(m/60)+' hora'+(m>=120?'s':''):'Em '+m+' min';
 const avisoTxt=r=>'⏰ '+(r.antes>0?antesTxt(r.antes)+': ':'')+r.t+(r.antes>0?' ('+hm(r.time)+')':'');
@@ -659,6 +675,7 @@ function checkReminders(){
   const now=new Date(),key=ds(now);let ch=false;
   DB.profiles.forEach(p=>(p.reminders||[]).forEach(r=>{
     if(r.done)return;
+    if(r.rep&&r.date<key){const n=proxDia(r,key);if(n!==r.date){r.date=n;ch=true}}   /* repetidos andam sozinhos: nunca ficam "atrasados" */
     if(r.rep){[key,ds(addDays(now,1))].forEach(d=>{const dd=parse(d);
       if(r.date<=d&&repBate(r,dd)&&now>=quandoDT(d,r)&&now-quandoDT(d,r)<12*3600000&&r.lastN!==d&&!(r.lastN>d)){r.lastN=d;r.notified=true;ch=true;notify('Ritmo',avisoTxt(r),'rem-'+r.id)}});return}
     if(r.notified)return;
@@ -670,19 +687,22 @@ function checkReminders(){
 const PKEY='ritmo.push';
 const pushSuportado=()=>'serviceWorker'in navigator&&'PushManager'in window&&'Notification'in window;
 const pushLigado=()=>{try{return localStorage.getItem(PKEY)==='1'&&Notification.permission==='granted'}catch(e){return false}};
-function listaAvisos(){const out=[];DB.profiles.forEach(p=>(p.reminders||[]).forEach(r=>{if(!r.done)out.push({id:r.id,t:r.t,date:r.date,time:r.time,rep:r.rep||'',antes:r.antes||0})}));return out}
+function listaAvisos(){const out=[];DB.profiles.forEach(p=>(p.reminders||[]).forEach(r=>{if(!r.done)out.push({id:r.id,t:r.t,date:r.date,time:r.time,rep:r.rep||'',dias:r.dias||null,antes:r.antes||0})}));return out}
 /* o service worker lê esta lista para montar a notificação quando o push chega */
 function cacheAvisos(){try{if(window.caches)caches.open('ritmo-dados').then(c=>c.put('avisos.json',new Response(JSON.stringify(listaAvisos()),{headers:{'Content-Type':'application/json'}}))).catch(()=>{})}catch(e){}}
 function proximoAviso(r,now){
-  let dia=r.date,q=quandoDT(dia,r);
-  if(!r.rep)return q>now?q:null;
-  for(let i=0;i<800&&q<=now;i++){const o=parse(dia);dia=ds(r.rep==='dia'?addDays(o,1):r.rep==='semana'?addDays(o,7):new Date(o.getFullYear(),o.getMonth()+1,parse(r.date).getDate()));q=quandoDT(dia,r)}
+  if(!r.rep){const q=quandoDT(r.date,r);return q>now?q:null}
+  let dia=proxDia(r,r.date),q=quandoDT(dia,r);
+  for(let i=0;i<400&&q<=now;i++){dia=proxDia(r,ds(addDays(parse(dia),1)));q=quandoDT(dia,r)}
   return q>now?q:null;
 }
 let AV_HASH=null;
 async function syncAvisos(force){
   if(!CLOUD_ON||!CLOUD.session||!pushLigado())return;
-  const now=new Date(),l=listaAvisos().map(r=>{const q=proximoAviso(r,now);return q?{id:r.id,quando:q.toISOString(),rep:r.rep}:null}).filter(Boolean);
+  const now=new Date(),l=[];listaAvisos().forEach(r=>{
+    /* dias escolhidos: o servidor recebe um aviso semanal por dia marcado */
+    if(r.rep==='dias')(r.dias||[]).forEach(w=>{const q=proximoAviso({...r,dias:[w]},now);if(q)l.push({id:r.id+'#'+w,quando:q.toISOString(),rep:'semana'})});
+    else{const q=proximoAviso(r,now);if(q)l.push({id:r.id,quando:q.toISOString(),rep:r.rep})}});
   const h=JSON.stringify(l);if(!force&&h===AV_HASH)return;
   try{await rpc('ritmo_sync_avisos',{p:l});AV_HASH=h}catch(e){}
 }
@@ -732,7 +752,7 @@ function avisosCard(){
 function toast(msg){let el=document.getElementById('toast');if(!el){el=document.createElement('div');el.id='toast';document.body.appendChild(el)}
   el.textContent=msg;el.className='show';clearTimeout(el._t);el._t=setTimeout(()=>el.className='',4500)}
 function briefing(p,s){
-  const d=parse(s),st=dayStats(p,s),rs=p.reminders.filter(r=>r.date===s&&!r.done).sort((a,b)=>a.time-b.time);
+  const d=parse(s),st=dayStats(p,s),rs=lembretesDoDia(p,s);
   const tasks=p.tasks.filter(t=>!t.done&&t.due&&t.due<=s);
   const nome=(p.name&&p.name!=='Eu')?p.name:((CLOUD.session&&CLOUD.session.email||'').split('@')[0].split(/[._-]/)[0]||'');
   const L=[`Bom dia${nome?', '+nome.charAt(0).toUpperCase()+nome.slice(1):''}! ${DOW[d.getDay()]}, ${d.getDate()}/${pad(d.getMonth()+1)}.`];
@@ -792,7 +812,7 @@ function grupoSnap(o){
   const noPer=x=>x>=ini&&x<=fim;
   if(o.plant)d.plant=Object.keys(p.shifts).filter(noPer).sort().map(x=>{const t=shiftOf(p,x);return t?{d:x,k:t.k,n:t.n,s:t.s,e:t.e,c:t.c,l:t.loc?t.loc.nome:''}:null}).filter(Boolean);
   if(o.comp)d.comp=Object.keys(p.plan).filter(noPer).sort().flatMap(x=>p.plan[x].filter(it=>p.gcat[it.cat]!==false).map(it=>({d:x,s:it.s,dur:it.dur,t:it.t,f:it.fixed?1:0})));
-  if(o.lemb)d.lemb=p.reminders.filter(r=>!r.done).map(r=>({date:r.date,time:r.time,t:r.t,rep:r.rep||''}));
+  if(o.lemb)d.lemb=p.reminders.filter(r=>!r.done).map(r=>({date:r.date,time:r.time,t:r.t,rep:r.rep||'',dias:r.dias||null}));
   if(o.tar)d.tar=p.tasks.filter(t=>!t.done&&t.due&&p.gcat[t.cat]!==false).map(t=>({due:t.due,t:t.t}));
   if(o.gastos){const c=new Date(),de=ds(new Date(c.getFullYear(),c.getMonth()-1,1));d.gastos=p.expenses.filter(e=>e.date>=de&&p.gecat[e.cat]!==false).map(e=>({date:e.date,v:e.v,desc:e.desc,cat:e.cat}))}
   return d;
@@ -952,15 +972,16 @@ function weekDots(p,h){
 }
 function remRow(r){const late=!r.done&&new Date()>new Date(parse(r.date).getTime()+r.time*60000);
   return`<div class="item ${r.done?'done':''}" data-a="editRem" data-v="${r.id}"><div class="ck ${r.done?'on':''}" data-a="remToggle" data-v="${r.id}">${r.done?'✓':''}</div>
-  <div class="tt"><div>${esc(r.t)}</div><div class="mut" style="${late?'color:var(--bad)':''}">⏰ ${r.date===todayS()?'hoje':dmy(r.date)} ${hm(r.time)}${r.antes?' · avisa '+(ANTES[r.antes]||r.antes+' min antes').toLowerCase():''}${r.rep?' · 🔁 '+REPS[r.rep].toLowerCase():''}${late?' · passou':''}</div></div>
+  <div class="tt"><div>${esc(r.t)}</div><div class="mut" style="${late?'color:var(--bad)':''}">⏰ ${r.date===todayS()?'hoje':dmy(r.date)} ${hm(r.time)}${r.antes?' · avisa '+(ANTES[r.antes]||r.antes+' min antes').toLowerCase():''}${r.rep?' · 🔁 '+repTxt(r).toLowerCase():''}${late?' · passou':''}</div></div>
   <button class="btn ghost sm" data-a="remDel" data-v="${r.id}">✕</button></div>`}
 function remModal(id){
-  const r=P().reminders.find(x=>x.id===id);if(!r)return;
+  const r=P().reminders.find(x=>x.id===id);if(!r)return;UI.remDias=r.rep==='dias'&&(r.dias||[]).length?[...r.dias]:[1,2,3,4,5];
   openModal(`<h3>Lembrete</h3><label class="field"><span>Título</span><input id="rm-t" value="${esc(r.t)}"></label>
     <div class="grid2"><label class="field"><span>Data</span><input id="rm-d" type="date" value="${r.date}"></label>
     <label class="field"><span>Hora</span><input id="rm-h" type="time" value="${hm(r.time)}"></label>
     <label class="field"><span>Avisar</span><select id="rm-a">${antesOpts(r.antes||0)}</select></label>
     <label class="field"><span>Repetir</span><select id="rm-r">${Object.entries(REPS).map(([k,n])=>`<option value="${k}" ${(r.rep||'')===k?'selected':''}>${n}</option>`).join('')}</select></label></div>
+    <div class="field" id="rm-wk" style="${r.rep==='dias'?'':'display:none'}"><span>Em quais dias?</span>${wkChips(UI.remDias,'remDia')}</div>
     <div class="row" style="margin-top:12px"><button class="btn danger" data-a="remDel" data-v="${r.id}">Excluir</button><span class="sp"></span>
     <button class="btn ghost" data-a="close">Cancelar</button><button class="btn" data-a="saveRem" data-v="${r.id}">Salvar</button></div>`);
 }
@@ -978,7 +999,7 @@ function weekGrid(p,days){
     if(c.work)b+=blk(st.work.s,st.work.e,'shift','💼 Expediente','background:#64748b');
     (p.plan[s]||[]).forEach(it=>{const k=CATS[it.cat]||CATS.pessoal;
       b+=blk(it.s,it.s+it.dur,it.done?'dn':'',`<b>${hm(it.s)}</b> ${esc(it.t)}`,`background:${k.c}22;border-left:3px solid ${k.c};color:#1f2340`,`data-a="editItem" data-v="${s}|${it.id}"`)});
-    p.reminders.filter(r=>r.date===s&&!r.done).forEach(r=>{b+=`<div class="gr" style="top:${y(r.time)}px" title="${esc(r.t)}">⏰ ${esc(r.t)}</div>`});
+    lembretesDoDia(p,s).forEach(r=>{b+=`<div class="gr" style="top:${y(r.time)}px" title="${esc(r.t)}">⏰ ${esc(r.t)}</div>`});
     if(s===todayS()){const n=new Date(),nm=n.getHours()*60+n.getMinutes();if(nm>=h0*60&&nm<=h1*60)b+=`<div class="now" style="top:${y(nm)}px"></div>`}
     h+=`<div class="gcol" style="height:${H}px;background-size:100% ${PX}px">${b}</div>`;
   });
@@ -1079,7 +1100,7 @@ semana(){
     const c=dayCtx(p,s),items=p.plan[s]||[];
     h+=`<div class="card" ${s<todayS()?'style="opacity:.7"':''}><div class="row"><b class="sp">${dmy(s)}${s===todayS()?' · hoje':''}</b>${shiftChip(c)}<button class="btn ghost sm" data-a="newItem" data-v="${s}">＋</button></div>
       ${items.length?items.map(it=>itemRow(s,it)).join(''):`<div class="mut" style="padding-top:6px">Livre</div>`}
-      ${lembretesDoDia(p,s).map(r=>`<div class="item" data-a="editRem" data-v="${r.id}"><div class="tm">${hm(r.time)}</div><div class="bar" style="background:#f59e0b"></div><div class="tt"><div>⏰ ${esc(r.t)}</div><div class="mut">lembrete${r.rep?' · 🔁 '+REPS[r.rep].toLowerCase():''}</div></div></div>`).join('')}
+      ${lembretesDoDia(p,s).map(r=>`<div class="item" data-a="editRem" data-v="${r.id}"><div class="tm">${hm(r.time)}</div><div class="bar" style="background:#f59e0b"></div><div class="tt"><div>⏰ ${esc(r.t)}</div><div class="mut">lembrete${r.rep?' · 🔁 '+repTxt(r).toLowerCase():''}</div></div></div>`).join('')}
       ${membros().filter(membroOn).map(m=>{const x=membroDia(m,s),t=[...x.plant.map(a=>a.k+' '+hm(a.s)+'–'+hm(a.e)),...x.comp.filter(i=>i.f).map(i=>hm(i.s)+' '+i.t)];return t.length?`<div class="gline"><span class="gav sm" style="background:${m.cor}">${esc(m.ini)}</span><span>${esc(m.nome)}: ${esc(t.join(' · '))}</span></div>`:''}).join('')}</div>`;
   });
   return h;
@@ -1414,9 +1435,8 @@ function captureModal(pre){
     <div class="row" style="margin-top:12px"><span class="sp"></span><button class="btn ghost" data-a="close">Cancelar</button><button class="btn" data-a="capSave">Salvar</button></div>`);
   setTimeout(()=>{const t=document.getElementById('cap-t');t&&t.focus()},50);
 }
-const REPS={'':'Não repete',dia:'Todo dia',semana:'Toda semana',mes:'Todo mês'};
-function proxima(r){const d=parse(r.date),t0=parse(todayS());let n=d;
-  do{n=r.rep==='dia'?addDays(n,1):r.rep==='semana'?addDays(n,7):new Date(n.getFullYear(),n.getMonth()+1,d.getDate())}while(n<t0);return ds(n)}
+const REPS={'':'Não repete',dia:'Todo dia',dias:'Dias da semana',semana:'Toda semana',mes:'Todo mês'};
+function proxima(r){const a=ds(addDays(parse(r.date),1)),t=todayS();return proxDia(r,a>t?a:t)}
 const antesOpts=sel=>{const ks=Object.keys(ANTES).map(Number);if(!ks.includes(+sel))ks.push(+sel);return ks.sort((a,b)=>a-b).map(k=>`<option value="${k}" ${+sel===k?'selected':''}>${ANTES[k]||k+' min antes'}</option>`).join('')};
 function capPreview(){
   const c=UI.cap,isG=c.kind==='gasto',opts=isG?ECATS:CATS;if(!opts[c.cat])c.cat=isG?'outros':'pessoal';
@@ -1427,6 +1447,7 @@ function capPreview(){
     ${c.kind==='lembrete'||c.kind==='compromisso'?`<label class="field"><span>Hora</span><input id="c-h" type="time" value="${c.time!=null?hm(c.time):''}"></label>`:''}
     ${c.kind==='lembrete'||c.kind==='compromisso'?`<label class="field"><span>Avisar</span><select id="c-a">${antesOpts(c.antes!=null?c.antes:c.kind==='compromisso'?30:0)}</select></label>`:''}
     ${c.kind==='lembrete'?`<label class="field"><span>Repetir</span><select id="c-r">${Object.entries(REPS).map(([k,n])=>`<option value="${k}" ${(c.rep||'')===k?'selected':''}>${n}</option>`).join('')}</select></label>`:''}
+    ${c.kind==='lembrete'&&c.rep==='dias'?`<div class="field" style="grid-column:1/-1"><span>Em quais dias?</span>${wkChips(c.dias,'capDia')}</div>`:''}
     <label class="field"><span>Categoria</span><select id="c-c">${Object.entries(opts).map(([k,x])=>`<option value="${k}" ${c.cat===k?'selected':''}>${x.i} ${x.n}</option>`).join('')}</select></label></div>
     ${c.kind==='compromisso'?'<div class="mut">Entra na agenda como compromisso fixo e você é avisado na antecedência escolhida.</div>':''}`;
 }
@@ -1484,7 +1505,7 @@ function buildICS(p,mon){
   const now=new Date().toISOString().replace(/[-:]/g,'').slice(0,15)+'Z';
   const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Ritmo//PT-BR','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
   const ev=(s,a,b,t)=>L.push('BEGIN:VEVENT','UID:'+uid()+'@ritmo','DTSTAMP:'+now,'DTSTART:'+icsStamp(s,a),'DTEND:'+icsStamp(s,b),'SUMMARY:'+String(t).replace(/[,;\\]/g,m=>'\\'+m).replace(/\n/g,' '),'END:VEVENT');
-  weekDays(mon).forEach(s=>{const t=shiftOf(p,s);if(t)ev(s,t.s,t.e,'Plantão '+t.k+(t.loc?' · '+t.loc.nome:''));(p.plan[s]||[]).forEach(it=>ev(s,it.s,it.s+it.dur,it.t));p.reminders.filter(r=>r.date===s&&!r.done).forEach(r=>ev(s,r.time,r.time+15,'⏰ '+r.t))});
+  weekDays(mon).forEach(s=>{const t=shiftOf(p,s);if(t)ev(s,t.s,t.e,'Plantão '+t.k+(t.loc?' · '+t.loc.nome:''));(p.plan[s]||[]).forEach(it=>ev(s,it.s,it.s+it.dur,it.t));lembretesDoDia(p,s).forEach(r=>ev(s,r.time,r.time+15,'⏰ '+r.t))});
   L.push('END:VCALENDAR');return L.join('\r\n');
 }
 
@@ -1493,6 +1514,8 @@ const split=v=>String(v).split('|');
 function addTask(title){const t=String(title||'').trim();if(!t)return false;P().tasks.push({id:uid(),t,cat:'pessoal',prio:'media',dur:30,due:'',period:'any',done:false,created:todayS()});return true}
 function addGoal(title){const t=String(title||'').trim();if(!t)return false;const k=UI.month.slice(0,7),p=P();(p.goals[k]=p.goals[k]||[]).push({id:uid(),t,done:false});return true}
 const A={
+  capDia:v=>{const c=capRead(),w=+v;c.dias=c.dias||[];c.dias=c.dias.includes(w)?c.dias.filter(x=>x!==w):[...c.dias,w].sort((a,b)=>a-b);capRefresh()},
+  remDia:(v,el)=>{const w=+v;UI.remDias=UI.remDias.includes(w)?UI.remDias.filter(x=>x!==w):[...UI.remDias,w];el.classList.toggle('on')},
   gcor:v=>{const[k,c]=v.split('|'),p=P();if(c)p.gcor[k]=c;else delete p.gcor[k];save();render()},
   gcat:v=>{const p=P(),[t,k]=v.split(':'),m=t==='a'?p.gcat:p.gecat;if(m[k]===false)delete m[k];else m[k]=false;save();grupoPublicar(true);render()},
   gview:v=>{UI.gview=v;render()},
@@ -1591,7 +1614,7 @@ const A={
   capSave:()=>{
     const p=P(),c=capRead(),t=(c.title||'').trim();if(!t){alert('Escreva o que anotar.');return}
     if(c.kind==='tarefa'){p.tasks.push({id:uid(),t,cat:c.cat,prio:'media',dur:30,due:c.date||'',period:'any',done:false,created:todayS()});toast('📝 Tarefa na fila: '+t)}
-    else if(c.kind==='lembrete'){const d=c.date||todayS(),tm=c.time??540;p.reminders.push({id:uid(),t,date:d,time:tm,rep:c.rep||'',antes:c.antes||0,done:false,notified:false});toast(`⏰ Vou te lembrar ${c.rep?REPS[c.rep].toLowerCase():d===todayS()?'hoje':dmy(d)} às ${hm(tm)}`)}
+    else if(c.kind==='lembrete'){const d=c.date||todayS(),tm=c.time??540;if(c.rep==='dias'&&!(c.dias||[]).length){alert('Escolha pelo menos um dia da semana.');return}const nr={id:uid(),t,date:d,time:tm,rep:c.rep||'',antes:c.antes||0,done:false,notified:false};if(c.rep==='dias'){nr.dias=[...c.dias];nr.date=proxDia(nr,d)}p.reminders.push(nr);toast(`⏰ Vou te lembrar ${c.rep?repTxt(nr).toLowerCase():d===todayS()?'hoje':dmy(d)} às ${hm(tm)}`)}
     else if(c.kind==='compromisso'){const d=c.date||todayS(),tm=c.time??540;(p.plan[d]=p.plan[d]||[]).push({id:uid(),t,cat:c.cat,s:tm,dur:60,fixed:true,done:false});p.plan[d].sort((a,b)=>a.s-b.s);
       p.reminders.push({id:uid(),t,date:d,time:tm,rep:'',antes:c.antes!=null?c.antes:30,done:false,notified:false});toast(`📅 ${t} · ${dmy(d)} ${hm(tm)}`)}
     else{if(!c.value){alert('Informe o valor.');return}p.expenses.push({id:uid(),v:c.value,desc:t,cat:c.cat,date:c.date||todayS()});toast('💰 '+brl(c.value)+' em '+(ECATS[c.cat]||ECATS.outros).n)}
@@ -1607,7 +1630,8 @@ const A={
   remDel:v=>{const p=P();p.reminders=p.reminders.filter(x=>x.id!==v);save();if(UI.modal&&!UI.modalFn)closeModal();else render()},
   editRem:v=>remModal(v),
   saveRem:v=>{const r=P().reminders.find(x=>x.id===v),t=val('rm-t').trim();if(!r||!t)return;
-    Object.assign(r,{t,date:val('rm-d')||r.date,time:toMin(val('rm-h')),antes:+val('rm-a'),rep:val('rm-r'),done:false,notified:false});delete r.lastN;save();closeModal()},
+    if(val('rm-r')==='dias'&&!UI.remDias.length){alert('Escolha pelo menos um dia da semana.');return}
+    Object.assign(r,{t,date:val('rm-d')||r.date,time:toMin(val('rm-h')),antes:+val('rm-a'),rep:val('rm-r'),done:false,notified:false});delete r.lastN;if(r.rep==='dias'){r.dias=[...UI.remDias].sort((a,b)=>a-b);r.date=proxDia(r,r.date)}else delete r.dias;save();closeModal()},
   remClear:()=>{const p=P();p.reminders=p.reminders.filter(x=>!x.done);save();render()},
   wview:v=>{UI.wview=v;render()},
   editExp:v=>expModal(v),
@@ -1738,6 +1762,8 @@ app.addEventListener('click',e=>{
   const f=A[el.dataset.a];if(f){e.preventDefault();f(el.dataset.v,el)}
 });
 app.addEventListener('change',e=>{
+  if(e.target.id==='c-r'){const c=capRead();if(c.rep==='dias'&&!(c.dias||[]).length)c.dias=[1,2,3,4,5];capRefresh();return}
+  if(e.target.id==='rm-r'){const w=document.getElementById('rm-wk');if(w)w.style.display=e.target.value==='dias'?'':'none';return}
   const el=e.target.closest('[data-c]');if(!el)return;
   const f=C[el.dataset.c];if(f){f(el.value,el);save();if(el.dataset.c!=='import')render()}
 });

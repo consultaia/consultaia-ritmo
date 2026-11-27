@@ -1,5 +1,5 @@
 /* Ritmo — service worker: funciona offline e mostra os avisos como notificação do sistema */
-const CACHE='ritmo-v21';
+const CACHE='ritmo-v22';
 const FILES=['./','./index.html','./manifest.json','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE&&x!=='ritmo-dados').map(x=>caches.delete(x)))).then(()=>self.clients.claim()))});
@@ -19,7 +19,7 @@ function devidos(lista,vistos,now){
   lista.forEach(r=>{
     const dias=[];
     if(!r.rep)dias.push(r.date);
-    else [hoje,am].forEach(d=>{if(r.date<=d){const o=pdt(r.date,0),x=pdt(d,0);if(r.rep==='dia'||(r.rep==='semana'&&o.getDay()===x.getDay())||(r.rep==='mes'&&o.getDate()===x.getDate()))dias.push(d)}});
+    else [hoje,am].forEach(d=>{if(r.date<=d){const o=pdt(r.date,0),x=pdt(d,0);if(r.rep==='dia'||(r.rep==='dias'&&(r.dias||[]).includes(x.getDay()))||(r.rep==='semana'&&o.getDay()===x.getDay())||(r.rep==='mes'&&o.getDate()===x.getDate()))dias.push(d)}});
     dias.forEach(d=>{const q=pdt(d,r.time-(r.antes||0)),dif=now-q,k=r.id+'|'+d;
       if(dif>=-90000&&dif<=30*60000&&!vistos.includes(k))out.push({r,k})});
   });
